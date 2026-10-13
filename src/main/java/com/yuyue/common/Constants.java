@@ -74,4 +74,9 @@ public final class Constants {
     /** 对局结算状态 */
     public static final int SETTLE_PENDING = 0;
     public static final int SETTLE_DONE = 1;
+
+    /** 计分日志动作：首次计分（该操作人即本场裁判） */
+    public static final int SCORE_ACTION_FIRST = 1;
+    /** 计分日志动作：修改比分 */
+    public static final int SCORE_ACTION_EDIT = 2;
 }

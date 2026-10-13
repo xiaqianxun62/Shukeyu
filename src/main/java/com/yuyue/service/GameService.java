@@ -14,11 +14,13 @@ import com.yuyue.engine.ArrangeEngine.ArrangeResult;
 import com.yuyue.engine.ArrangeEngine.Player;
 import com.yuyue.entity.Game;
 import com.yuyue.entity.MatchGame;
+import com.yuyue.entity.MatchScoreLog;
 import com.yuyue.entity.Registration;
 import com.yuyue.entity.User;
 import com.yuyue.exception.BizException;
 import com.yuyue.mapper.GameMapper;
 import com.yuyue.mapper.MatchGameMapper;
+import com.yuyue.mapper.MatchScoreLogMapper;
 import com.yuyue.mapper.RegistrationMapper;
 import com.yuyue.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +48,7 @@ public class GameService {
     private final GameMapper gameMapper;
     private final RegistrationMapper registrationMapper;
     private final MatchGameMapper matchGameMapper;
+    private final MatchScoreLogMapper matchScoreLogMapper;
     private final UserMapper userMapper;
     private final com.yuyue.mapper.CourtMapper courtMapper;
     private final StringRedisTemplate redisTemplate;
@@ -406,10 +409,18 @@ public class GameService {
                         .eq(MatchGame::getGameId, gameId)
                         .orderByAsc(MatchGame::getId));
         Map<Long, String> displayNames = displayNamesOf(gameId);
+        // 计分日志：每场的裁判（首次计分人）与改分历史
+        Map<Long, List<GameMatchesResponse.ScoreLogItem>> scoreLogsByMatch = loadScoreLogs(list);
         List<GameMatchesResponse.MatchItem> items = list.stream()
                 .map(m -> {
                     List<Long> teamA = split(m.getTeamA());
                     List<Long> teamB = split(m.getTeamB());
+                    List<GameMatchesResponse.ScoreLogItem> scoreLogs =
+                            scoreLogsByMatch.getOrDefault(m.getId(), List.of());
+                    GameMatchesResponse.ScoreLogItem referee = scoreLogs.stream()
+                            .filter(l -> Objects.equals(l.getAction(), Constants.SCORE_ACTION_FIRST))
+                            .findFirst()
+                            .orElse(null);
                     return GameMatchesResponse.MatchItem.builder()
                             .matchId(m.getId())
                             .format(m.getFormat())
@@ -421,6 +432,9 @@ public class GameService {
                             .scoreB(m.getScoreB())
                             .winner(m.getWinner())
                             .settled(Objects.equals(m.getSettleStatus(), Constants.SETTLE_DONE))
+                            .refereeId(referee != null ? referee.getOperatorId() : null)
+                            .refereeName(referee != null ? referee.getOperatorName() : null)
+                            .scoreLogs(scoreLogs)
                             .build();
                 })
                 .toList();
@@ -436,6 +450,53 @@ public class GameService {
                 .totalCount(items.size())
                 .matches(items)
                 .build();
+    }
+
+    /**
+     * 批量加载每场对阵的计分日志（按提交顺序升序）。
+     * 日志操作人未必在报名名单里（如发起人代录），故单独取用户表并用昵称优先的展示名。
+     */
+    private Map<Long, List<GameMatchesResponse.ScoreLogItem>> loadScoreLogs(List<MatchGame> list) {
+        if (list.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> matchIds = list.stream().map(MatchGame::getId).toList();
+        List<MatchScoreLog> logs = matchScoreLogMapper.selectList(
+                new LambdaQueryWrapper<MatchScoreLog>()
+                        .in(MatchScoreLog::getMatchId, matchIds)
+                        .orderByAsc(MatchScoreLog::getId));
+        if (logs.isEmpty()) {
+            return Map.of();
+        }
+        // 操作人展示名：昵称优先，回退姓名，再回退球友+id
+        Map<Long, String> operatorLabels = new HashMap<>();
+        for (Long opId : logs.stream().map(MatchScoreLog::getOperatorId).distinct().toList()) {
+            User u = userMapper.selectById(opId);
+            String label = null;
+            if (u != null) {
+                if (u.getNickname() != null && !u.getNickname().isBlank()) {
+                    label = u.getNickname().trim();
+                } else if (u.getName() != null && !u.getName().isBlank()) {
+                    label = u.getName().trim();
+                }
+            }
+            operatorLabels.put(opId, label != null ? label : "球友" + opId);
+        }
+        Map<Long, List<GameMatchesResponse.ScoreLogItem>> out = new HashMap<>();
+        for (MatchScoreLog l : logs) {
+            out.computeIfAbsent(l.getMatchId(), k -> new java.util.ArrayList<>())
+                    .add(GameMatchesResponse.ScoreLogItem.builder()
+                            .operatorId(l.getOperatorId())
+                            .operatorName(operatorLabels.getOrDefault(l.getOperatorId(), "球友" + l.getOperatorId()))
+                            .action(l.getAction())
+                            .scoreA(l.getScoreA())
+                            .scoreB(l.getScoreB())
+                            .prevScoreA(l.getPrevScoreA())
+                            .prevScoreB(l.getPrevScoreB())
+                            .time(l.getCreateTime())
+                            .build());
+        }
+        return out;
     }
 
     /**

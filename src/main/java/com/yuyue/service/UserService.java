@@ -137,6 +137,11 @@ public class UserService {
             checkNameUnique(userId, newName);
             user.setName(newName);
         }
+        // 昵称：不传(null)=不修改；空串=清除；非空=覆盖
+        if (req.getNickname() != null) {
+            String trimmed = req.getNickname().trim();
+            user.setNickname(trimmed.isEmpty() ? null : trimmed);
+        }
         if (req.getGender() != null) {
             user.setGender(req.getGender());
         }
@@ -299,6 +304,7 @@ public class UserService {
                 .token(token)
                 .userId(user.getId())
                 .name(user.getName())
+                .nickname(user.getNickname())
                 .gender(user.getGender())
                 .account(user.getAccount())
                 .avatar(user.getAvatar())

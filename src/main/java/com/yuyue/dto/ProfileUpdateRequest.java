@@ -15,6 +15,10 @@ public class ProfileUpdateRequest {
     @Size(max = 32, message = "姓名过长")
     private String name;
 
+    /** 昵称：积分榜等非姓名场景展示；不传(null)表示不修改，传空串表示清除 */
+    @Size(max = 32, message = "昵称过长")
+    private String nickname;
+
     /** 1男 2女 */
     @NotNull(message = "性别不能为空")
     @Min(value = 1, message = "性别取值不合法")

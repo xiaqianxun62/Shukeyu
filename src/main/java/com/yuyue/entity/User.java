@@ -29,6 +29,9 @@ public class User {
     /** 姓名 */
     private String name;
 
+    /** 昵称：积分榜等非姓名展示场景使用；为空时回退显示姓名 */
+    private String nickname;
+
     /** 0未知 1男 2女 */
     private Integer gender;
 

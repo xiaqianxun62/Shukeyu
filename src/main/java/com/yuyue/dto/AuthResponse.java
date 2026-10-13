@@ -13,6 +13,9 @@ public class AuthResponse {
 
     private String name;
 
+    /** 昵称：积分榜等非姓名场景展示，未设置时为 null */
+    private String nickname;
+
     private Integer gender;
 
     /** 登录账号：绑定后才有，未绑定时为 null */

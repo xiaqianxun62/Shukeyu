@@ -35,8 +35,8 @@ public class MatchController {
     @PostMapping
     @OperationLog("上报对局结果")
     public ApiResponse<Map<String, Long>> report(@Valid @RequestBody MatchReportRequest req) {
-        UserContext.require();
-        Long matchId = matchService.report(req);
+        Long operatorId = UserContext.require();
+        Long matchId = matchService.report(req, operatorId);
         return ApiResponse.ok(Map.of("matchId", matchId));
     }
 
@@ -44,12 +44,12 @@ public class MatchController {
      * 现场计分：给编排好的一场对阵录比分，胜方由比分自动判定。
      * 打完全部对阵后球局自动结束。允许重复提交（改分），但只结算一次积分。
      */
-    @Operation(summary = "现场计分", description = "录入某场对阵的比分，胜方自动判定；全部打完球局自动结束")
+    @Operation(summary = "现场计分", description = "录入某场对阵的比分，胜方自动判定；全部打完球局自动结束。首次提交者记为本场裁判，改分全程留痕")
     @PutMapping("{id}/score")
     @OperationLog("现场计分")
     public ApiResponse<MatchScoreResponse> score(@PathVariable Long id,
                                                  @Valid @RequestBody MatchScoreRequest req) {
-        UserContext.require();
-        return ApiResponse.ok(matchService.score(id, req));
+        Long operatorId = UserContext.require();
+        return ApiResponse.ok(matchService.score(id, req, operatorId));
     }
 }

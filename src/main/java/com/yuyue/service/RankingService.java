@@ -58,7 +58,7 @@ public class RankingService {
             }
             result.add(RankingItem.builder()
                     .userId(userId)
-                    .name(user.getName() != null ? user.getName() : "球友" + userId)
+                    .name(displayName(user))
                     .rating(tuple.getScore() == null ? user.getRating() : tuple.getScore().intValue())
                     .win(user.getWinCount())
                     .loss(user.getLossCount())
@@ -67,6 +67,20 @@ public class RankingService {
                     .build());
         }
         return result;
+    }
+
+    /**
+     * 积分榜展示名：优先昵称（非姓名展示场景），未设昵称回退真实姓名，
+     * 姓名也没有时按 userId 兜底。
+     */
+    private static String displayName(User user) {
+        if (user.getNickname() != null && !user.getNickname().isBlank()) {
+            return user.getNickname().trim();
+        }
+        if (user.getName() != null && !user.getName().isBlank()) {
+            return user.getName();
+        }
+        return "球友" + user.getId();
     }
 
     /** 榜单更新某个用户积分（结算后调用） */
