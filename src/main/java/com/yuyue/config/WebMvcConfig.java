@@ -2,6 +2,7 @@ package com.yuyue.config;
 
 import com.yuyue.web.AccessLogInterceptor;
 import com.yuyue.web.AuthInterceptor;
+import com.yuyue.web.VisitLogInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -15,6 +16,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
     private final AccessLogInterceptor accessLogInterceptor;
+    private final VisitLogInterceptor visitLogInterceptor;
     private final UploadProperties uploadProperties;
 
     /** 访问日志统一排除：静态资源 / 文档 / 错误页，避免无意义噪音 */
@@ -68,6 +70,13 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // 全量访问日志：在鉴权之后执行，能读到 UserContext；静态资源 / 文档不记录
         registry.addInterceptor(accessLogInterceptor)
                 .order(1)
+                .addPathPatterns("/**")
+                .excludePathPatterns(LOG_EXCLUDES);
+
+        // 浏览 IP 记录：preHandle 时 AuthInterceptor 已填充 UserContext，
+        // 只记 GET 浏览行为，异步落库；排除项与访问日志保持一致
+        registry.addInterceptor(visitLogInterceptor)
+                .order(2)
                 .addPathPatterns("/**")
                 .excludePathPatterns(LOG_EXCLUDES);
     }
