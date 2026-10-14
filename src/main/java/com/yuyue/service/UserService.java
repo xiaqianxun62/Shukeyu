@@ -65,6 +65,9 @@ public class UserService {
         User user = new User();
         user.setAccount(req.getAccount());
         user.setName(req.getName());
+        // 昵称选填：留空则由展示层回退到真实姓名
+        String nickname = req.getNickname() == null ? null : req.getNickname().trim();
+        user.setNickname(nickname == null || nickname.isEmpty() ? null : nickname);
         user.setGender(req.getGender());
         user.setPasswordHash(hash(req.getPassword(), salt) + ":" + salt);
         user.setRating(eloProperties.getDefaultRating());
@@ -141,6 +144,10 @@ public class UserService {
         if (req.getNickname() != null) {
             String trimmed = req.getNickname().trim();
             user.setNickname(trimmed.isEmpty() ? null : trimmed);
+        }
+        // 积分榜展示名偏好：0 真实姓名 1 昵称，null 表示不修改
+        if (req.getNameDisplay() != null) {
+            user.setNameDisplay(req.getNameDisplay());
         }
         if (req.getGender() != null) {
             user.setGender(req.getGender());
@@ -305,6 +312,7 @@ public class UserService {
                 .userId(user.getId())
                 .name(user.getName())
                 .nickname(user.getNickname())
+                .nameDisplay(user.getNameDisplay() == null ? 1 : user.getNameDisplay())
                 .gender(user.getGender())
                 .account(user.getAccount())
                 .avatar(user.getAvatar())

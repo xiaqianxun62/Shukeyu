@@ -32,6 +32,13 @@ public class User {
     /** 昵称：积分榜等非姓名展示场景使用；为空时回退显示姓名 */
     private String nickname;
 
+    /**
+     * 积分榜展示名偏好：0 真实姓名 1 昵称（默认）。
+     * 只影响本人在积分榜上的显示，其他人的展示名不受影响。
+     */
+    @TableField("name_display")
+    private Integer nameDisplay;
+
     /** 0未知 1男 2女 */
     private Integer gender;
 

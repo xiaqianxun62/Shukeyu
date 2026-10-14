@@ -19,6 +19,11 @@ public class ProfileUpdateRequest {
     @Size(max = 32, message = "昵称过长")
     private String nickname;
 
+    /** 积分榜展示名偏好：0 真实姓名 1 昵称；不传表示不修改 */
+    @Min(value = 0, message = "展示名取值不合法")
+    @Max(value = 1, message = "展示名取值不合法")
+    private Integer nameDisplay;
+
     /** 1男 2女 */
     @NotNull(message = "性别不能为空")
     @Min(value = 1, message = "性别取值不合法")

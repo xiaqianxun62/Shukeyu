@@ -70,15 +70,20 @@ public class RankingService {
     }
 
     /**
-     * 积分榜展示名：优先昵称（非姓名展示场景），未设昵称回退真实姓名，
-     * 姓名也没有时按 userId 兜底。
+     * 积分榜展示名：由每人自己选（user.name_display，0 真实姓名 1 昵称，默认昵称）。
+     * 只决定这一行（本人）显示什么，选中的那个为空时回退另一个，都没有则按 userId 兜底。
      */
     private static String displayName(User user) {
-        if (user.getNickname() != null && !user.getNickname().isBlank()) {
-            return user.getNickname().trim();
-        }
-        if (user.getName() != null && !user.getName().isBlank()) {
-            return user.getName();
+        boolean preferNickname = user.getNameDisplay() == null || user.getNameDisplay() != 0;
+        String nickname = user.getNickname() == null || user.getNickname().isBlank()
+                ? null : user.getNickname().trim();
+        String name = user.getName() == null || user.getName().isBlank() ? null : user.getName();
+        if (preferNickname) {
+            if (nickname != null) return nickname;
+            if (name != null) return name;
+        } else {
+            if (name != null) return name;
+            if (nickname != null) return nickname;
         }
         return "球友" + user.getId();
     }

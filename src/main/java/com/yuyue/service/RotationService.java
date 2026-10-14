@@ -10,12 +10,14 @@ import com.yuyue.engine.EloCalculator;
 import com.yuyue.engine.RotationEngine;
 import com.yuyue.entity.Game;
 import com.yuyue.entity.MatchGame;
+import com.yuyue.entity.MatchScoreLog;
 import com.yuyue.entity.RatingHistory;
 import com.yuyue.entity.Registration;
 import com.yuyue.entity.User;
 import com.yuyue.exception.BizException;
 import com.yuyue.mapper.GameMapper;
 import com.yuyue.mapper.MatchGameMapper;
+import com.yuyue.mapper.MatchScoreLogMapper;
 import com.yuyue.mapper.RatingHistoryMapper;
 import com.yuyue.mapper.RegistrationMapper;
 import com.yuyue.mapper.UserMapper;
@@ -30,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -49,6 +52,7 @@ public class RotationService {
     private final RegistrationMapper registrationMapper;
     private final UserMapper userMapper;
     private final MatchGameMapper matchGameMapper;
+    private final MatchScoreLogMapper matchScoreLogMapper;
     private final RatingHistoryMapper ratingHistoryMapper;
     private final EloProperties eloProperties;
 
@@ -157,6 +161,9 @@ public class RotationService {
             byRound.computeIfAbsent(mg.getRoundNo(), k -> new ArrayList<>()).add(mg);
         }
 
+        // 计分留痕：每场的裁判（首次计分人）与改分历史，轮排页据此展示与核对比分
+        Map<Long, List<RotationResponse.ScoreLogItem>> scoreLogsByMatch = loadScoreLogs(saved);
+
         Map<Long, Integer> playCount = new LinkedHashMap<>();
         players.forEach(p -> playCount.put(p.userId(), 0));
         Map<String, Integer> partnerHistory = new LinkedHashMap<>();
@@ -175,6 +182,12 @@ public class RotationService {
                 recordPairs(partnerHistory, a);
                 recordPairs(partnerHistory, b);
                 courts = Math.max(courts, mg.getCourt());
+                List<RotationResponse.ScoreLogItem> logs =
+                        scoreLogsByMatch.getOrDefault(mg.getId(), List.of());
+                RotationResponse.ScoreLogItem referee = logs.stream()
+                        .filter(l -> Objects.equals(l.getAction(), Constants.SCORE_ACTION_FIRST))
+                        .findFirst()
+                        .orElse(null);
                 items.add(RotationResponse.MatchItem.builder()
                         .matchId(mg.getId())
                         .court(mg.getCourt())
@@ -188,6 +201,9 @@ public class RotationService {
                         .scoreA(mg.getScoreA() == null ? 0 : mg.getScoreA())
                         .scoreB(mg.getScoreB() == null ? 0 : mg.getScoreB())
                         .winner(mg.getWinner() == null ? 0 : mg.getWinner())
+                        .refereeId(referee != null ? referee.getOperatorId() : null)
+                        .refereeName(referee != null ? referee.getOperatorName() : null)
+                        .scoreLogs(logs)
                         .build());
             }
             onCourt.forEach(id -> playCount.merge(id, 1, Integer::sum));
@@ -287,6 +303,52 @@ public class RotationService {
                 .rotation(rounds)
                 .stats(stats)
                 .build();
+    }
+
+    /**
+     * 批量加载每场对阵的计分日志（按提交顺序升序）。
+     * 日志操作人未必在报名名单里（如发起人代录），故单独取用户表并用昵称优先的展示名。
+     */
+    private Map<Long, List<RotationResponse.ScoreLogItem>> loadScoreLogs(List<MatchGame> saved) {
+        if (saved.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> matchIds = saved.stream().map(MatchGame::getId).toList();
+        List<MatchScoreLog> logs = matchScoreLogMapper.selectList(
+                new LambdaQueryWrapper<MatchScoreLog>()
+                        .in(MatchScoreLog::getMatchId, matchIds)
+                        .orderByAsc(MatchScoreLog::getId));
+        if (logs.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> operatorLabels = new LinkedHashMap<>();
+        for (Long opId : logs.stream().map(MatchScoreLog::getOperatorId).distinct().toList()) {
+            User u = userMapper.selectById(opId);
+            String label = null;
+            if (u != null) {
+                if (u.getNickname() != null && !u.getNickname().isBlank()) {
+                    label = u.getNickname().trim();
+                } else if (u.getName() != null && !u.getName().isBlank()) {
+                    label = u.getName().trim();
+                }
+            }
+            operatorLabels.put(opId, label != null ? label : "球友" + opId);
+        }
+        Map<Long, List<RotationResponse.ScoreLogItem>> out = new LinkedHashMap<>();
+        for (MatchScoreLog l : logs) {
+            out.computeIfAbsent(l.getMatchId(), k -> new ArrayList<>())
+                    .add(RotationResponse.ScoreLogItem.builder()
+                            .operatorId(l.getOperatorId())
+                            .operatorName(operatorLabels.getOrDefault(l.getOperatorId(), "球友" + l.getOperatorId()))
+                            .action(l.getAction())
+                            .scoreA(l.getScoreA())
+                            .scoreB(l.getScoreB())
+                            .prevScoreA(l.getPrevScoreA())
+                            .prevScoreB(l.getPrevScoreB())
+                            .time(l.getCreateTime())
+                            .build());
+        }
+        return out;
     }
 
     /** 批量取报名人用户信息 */

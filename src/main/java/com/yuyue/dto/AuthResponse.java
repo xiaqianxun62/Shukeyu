@@ -16,6 +16,9 @@ public class AuthResponse {
     /** 昵称：积分榜等非姓名场景展示，未设置时为 null */
     private String nickname;
 
+    /** 积分榜展示名偏好：0 真实姓名 1 昵称（默认） */
+    private Integer nameDisplay;
+
     private Integer gender;
 
     /** 登录账号：绑定后才有，未绑定时为 null */

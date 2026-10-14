@@ -18,6 +18,13 @@ public class RegisterRequest {
     @Size(max = 32, message = "姓名过长")
     private String name;
 
+    /**
+     * 昵称：对外（球局广场、评论等场景）展示用，选填，留空则展示真实姓名。
+     * 与姓名分开：姓名用于对局内统计与核对，昵称用于上网冲浪时保护隐私。
+     */
+    @Size(max = 32, message = "昵称过长")
+    private String nickname;
+
     /** 1男 2女 */
     @NotNull(message = "性别不能为空")
     @Min(value = 1, message = "性别取值不合法")

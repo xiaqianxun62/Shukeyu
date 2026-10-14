@@ -3,6 +3,7 @@ package com.yuyue.dto;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -76,6 +77,40 @@ public class RotationResponse {
         private Integer scoreB;
         /** 1 A队胜 2 B队胜 0 未计分 */
         private Integer winner;
+
+        /** 裁判：首次提交比分的用户；未计分时为 null */
+        private Long refereeId;
+
+        /** 裁判展示名（优先昵称，回退姓名） */
+        private String refereeName;
+
+        /** 计分留痕：谁当裁判、计了多少分、谁后面又改了（按时间升序） */
+        private List<ScoreLogItem> scoreLogs;
+    }
+
+    /** 单次计分操作记录 */
+    @Data
+    @Builder
+    public static class ScoreLogItem {
+
+        private Long operatorId;
+
+        /** 操作人展示名（优先昵称，回退姓名） */
+        private String operatorName;
+
+        /** 1 首次计分（裁判） 2 修改比分 */
+        private Integer action;
+
+        private Integer scoreA;
+
+        private Integer scoreB;
+
+        /** 改前比分（首次计分为 null） */
+        private Integer prevScoreA;
+
+        private Integer prevScoreB;
+
+        private LocalDateTime time;
     }
 
     @Data
