@@ -2691,3 +2691,15 @@
 [14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/cover_1791444630261_6974.jpg HTTP/1.1" 200 13564ms
 [14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/avatar_20_1791943801665_4348.jpeg HTTP/1.1" 200 4062ms
 [14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/avatar_20_1791943801665_4348.jpeg HTTP/1.1" 200 2961ms
+[14/Oct/2026:18:02:57 +0800] 127.0.0.1 "GET /api/games HTTP/1.1" 404 17485ms
+[14/Oct/2026:18:02:57 +0800] 127.0.0.1 "GET /api/settings/home-poem HTTP/1.1" 404 3921ms
+[14/Oct/2026:18:03:09 +0800] 127.0.0.1 "GET /api/games HTTP/1.1" 404 5949ms
+[14/Oct/2026:18:03:09 +0800] 127.0.0.1 "GET /api/settings/home-poem HTTP/1.1" 404 3846ms
+[14/Oct/2026:18:03:23 +0800] 127.0.0.1 "GET /api/games HTTP/1.1" 404 7177ms
+[14/Oct/2026:18:03:23 +0800] 127.0.0.1 "GET /api/settings/home-poem HTTP/1.1" 404 3289ms
+[14/Oct/2026:18:04:06 +0800] 127.0.0.1 "GET /api/games HTTP/1.1" 404 9807ms
+[14/Oct/2026:18:04:06 +0800] 127.0.0.1 "GET /api/settings/home-poem HTTP/1.1" 404 3822ms
+[14/Oct/2026:18:06:44 +0800] 127.0.0.1 "GET /api/auth/me HTTP/1.1" 404 4050ms
+[14/Oct/2026:18:06:45 +0800] 127.0.0.1 "GET /api/games HTTP/1.1" 404 3388ms
+[14/Oct/2026:18:06:45 +0800] 127.0.0.1 "GET /api/settings/home-poem HTTP/1.1" 404 3635ms
+[14/Oct/2026:18:06:49 +0800] 127.0.0.1 "GET /api/auth/captcha HTTP/1.1" 404 3620ms
