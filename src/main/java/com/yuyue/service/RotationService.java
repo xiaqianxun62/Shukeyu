@@ -381,9 +381,8 @@ public class RotationService {
     private RotationResponse build(Long gameId, List<RotationEngine.RotationPlayer> players,
                                     RotationRequest req, Map<Long, String> avatarByUser) {
         boolean balance = !Boolean.FALSE.equals(req.getBalanceStrength());
-        int genderRule = req.getGenderRule() == null ? Constants.GENDER_RULE_ANY : req.getGenderRule();
         RotationEngine.RotationPlan result = rotationEngine.plan(
-                players, req.getCourts(), req.getRounds(), req.getFormat(), balance, genderRule);
+                players, req.getCourts(), req.getRounds(), req.getFormat(), balance, resolveTypes(req));
 
         Map<Long, RotationEngine.RotationPlayer> byId = new LinkedHashMap<>();
         players.forEach(p -> byId.put(p.userId(), p));
@@ -615,38 +614,65 @@ public class RotationService {
     }
 
     /**
-     * 使用按性别规则编排前，先检查报名者中男女数量是否足够；
-     * 如果男/女都是 0，说明报名者还没填性别，给出更明确的提示。
+     * 解析本次允许开哪几种场地。
+     *
+     * <p>优先用新的多选 {@code courtTypes}；没传就回落到旧的单选 {@code genderRule}，
+     * 这样老客户端（以及历史轮排存档）不受影响。两种都没给时兜底为「不限性别」，
+     * 保持与改动前的默认行为一致。
+     */
+    private RotationEngine.CourtTypes resolveTypes(RotationRequest req) {
+        List<String> types = req.getCourtTypes();
+        if (types != null && !types.isEmpty()) {
+            RotationEngine.CourtTypes parsed = RotationEngine.CourtTypes.of(types);
+            if (!parsed.isEmpty()) {
+                return parsed;
+            }
+        }
+        return RotationEngine.CourtTypes.fromLegacyRule(
+                req.getGenderRule() == null ? Constants.GENDER_RULE_ANY : req.getGenderRule());
+    }
+
+    /**
+     * 用受限场地类型编排前，先检查报名者里男女数量是否够；
+     * 如果男 / 女都是 0，说明报名者还没填性别，给出更明确的提示。
+     *
+     * <p>只提醒「一个都凑不出」的情况，不做逐类型的强校验——
+     * 引擎会按实际人数自动少开几片场地（比如只有 3 个男生时就不开男双场），
+     * 这比在这里直接报错更灵活：球友宁可少开一片，也不想被拦下。
      */
     private void validateGenderForRule(List<RotationEngine.RotationPlayer> players, RotationRequest req) {
         Integer format = req.getFormat();
-        int genderRule = req.getGenderRule() == null ? Constants.GENDER_RULE_ANY : req.getGenderRule();
-        if (format == null || format == Constants.FORMAT_SINGLES || genderRule == Constants.GENDER_RULE_ANY) {
+        if (format == null || format == Constants.FORMAT_SINGLES) {
+            return;
+        }
+        RotationEngine.CourtTypes want = resolveTypes(req);
+        // 只有「不限性别」时用不到性别信息，不必打扰用户
+        if (!want.mixed() && !want.men() && !want.women()) {
             return;
         }
         int males = countGender(players, Constants.GENDER_MALE);
         int females = countGender(players, Constants.GENDER_FEMALE);
-        if (genderRule == Constants.GENDER_RULE_MIXED) {
-            if (males < 2 || females < 2) {
-                String msg = (males == 0 && females == 0)
-                        ? "参数错误：报名者尚未填写性别，请先让报名者完善性别后再使用混双规则"
-                        : "参数错误：混双每场需要 2 男 2 女，当前男 " + males + " 人、女 " + females + " 人，无法开赛";
-                throw new BizException(ErrorCode.PARAM_ERROR, msg);
-            }
-        } else if (genderRule == Constants.GENDER_RULE_MEN) {
-            if (males < 4) {
-                String msg = males == 0
-                        ? "参数错误：报名者尚未填写性别，请先让报名者完善性别后再使用男双规则"
-                        : "参数错误：男双每场需要 4 名男生，当前男生 " + males + " 人，无法开赛";
-                throw new BizException(ErrorCode.PARAM_ERROR, msg);
-            }
-        } else if (genderRule == Constants.GENDER_RULE_WOMEN) {
-            if (females < 4) {
-                String msg = females == 0
-                        ? "参数错误：报名者尚未填写性别，请先让报名者完善性别后再使用女双规则"
-                        : "参数错误：女双每场需要 4 名女生，当前女生 " + females + " 人，无法开赛";
-                throw new BizException(ErrorCode.PARAM_ERROR, msg);
-            }
+        if (males == 0 && females == 0) {
+            throw new BizException(ErrorCode.PARAM_ERROR,
+                    "报名者尚未填写性别，无法按「" + typeNames(want) + "」编排，请先让报名者完善性别");
         }
+    }
+
+    /** 把场地类型翻成给用户看的名字，如「混双场 + 男双场」 */
+    private String typeNames(RotationEngine.CourtTypes want) {
+        List<String> names = new ArrayList<>();
+        if (want.mixed()) {
+            names.add("混双场");
+        }
+        if (want.men()) {
+            names.add("男双场");
+        }
+        if (want.women()) {
+            names.add("女双场");
+        }
+        if (names.isEmpty() && want.any()) {
+            names.add("不限性别场");
+        }
+        return String.join(" + ", names);
     }
 }

@@ -62,6 +62,12 @@ public final class Constants {
     public static final int GENDER_RULE_MIXED = 3;
     /** 男女分场：按报名男女比分配场地，部分场地开男双、其余开女双，男女队员互不干扰 */
     public static final int GENDER_RULE_SEPARATE = 4;
+    /**
+     * 三场并行：混双 + 男双 + 女双同时开，按性别人数自动分配三类场地。
+     * 与「男女分场」的区别是它还允许开混双场，且混双优先——
+     * 所以男女比例越均衡，混双场就越多，两类场地都开得出来。
+     */
+    public static final int GENDER_RULE_ALL_THREE = 5;
 
     /** 用户管理员标记 */
     public static final int ADMIN_NO = 0;

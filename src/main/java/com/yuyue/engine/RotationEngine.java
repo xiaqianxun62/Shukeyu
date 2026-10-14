@@ -8,12 +8,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 /**
  * 轮排引擎（场地轮转上场）
@@ -74,8 +78,20 @@ public class RotationEngine {
     }
 
     public record RotationPlan(int courts, int rounds, int format,
-                               List<RotationRound> rotation, List<PlayerStat> stats) {
-    }
+                                  List<RotationRound> rotation, List<PlayerStat> stats) {
+        }
+
+        /**
+         * 三场并行（{@link Constants#GENDER_RULE_ALL_THREE}）一轮的场地配额：
+         * 混双场 / 男双场 / 女双场各开几片。
+         *
+         * <p>三片场地加起来 = 这一轮同时开打的场数，人数恒为 4 × 三者之和。
+         */
+        public record CourtMix(int mixed, int men, int women) {
+            public int total() {
+                return mixed + men + women;
+            }
+        }
 
     /* ---------------- 主流程 ---------------- */
 
@@ -92,12 +108,233 @@ public class RotationEngine {
     }
 
     /**
-     * @param genderRule 双打怎么配队：{@link Constants#GENDER_RULE_ANY} 不分性别、
-     *                   {@link Constants#GENDER_RULE_MEN} 男双、{@link Constants#GENDER_RULE_WOMEN} 女双、
-     *                   {@link Constants#GENDER_RULE_MIXED} 混双（每队一男一女）；单打时忽略
+     * 场地类型：本次允许开哪几种场地（双打时生效；单打一律单打，全部置 false）。
+     *
+     * <p>四种类型可任意组合，这就是「选男双就只有男双打男双、选男双+混双就两种都有」的模型：
+     * <ul>
+     *   <li>{@code mixed} 混双场：每片 2 男 2 女</li>
+     *   <li>{@code men} 男双场：每片 4 男</li>
+     *   <li>{@code women} 女双场：每片 4 女</li>
+     *   <li>{@code any} 不限性别场：上场的 4 人性别任意（最宽松，排在最后兜底）</li>
+     * </ul>
+     * 全 false 表示没选任何类型，调用方应先兜住。
+     */
+    public record CourtTypes(boolean mixed, boolean men, boolean women, boolean any) {
+
+        /** 值的优先级：越受限的越先占场地，把剩余的人留给最宽松的 any */
+        static final List<String> PRIORITY = List.of("mixed", "men", "women", "any");
+
+        public boolean isEmpty() {
+            return !mixed && !men && !women && !any;
+        }
+
+        public boolean has(String type) {
+            return switch (type) {
+                case "mixed" -> mixed;
+                case "men" -> men;
+                case "women" -> women;
+                case "any" -> any;
+                default -> false;
+            };
+        }
+
+        public CourtTypes enable(String type) {
+            return switch (type) {
+                case "mixed" -> new CourtTypes(true, men, women, any);
+                case "men" -> new CourtTypes(mixed, true, women, any);
+                case "women" -> new CourtTypes(mixed, men, true, any);
+                case "any" -> new CourtTypes(mixed, men, women, true);
+                default -> this;
+            };
+        }
+
+        /** 按优先级排列的已选类型（去重后的顺序即优先级顺序） */
+        public List<String> ordered() {
+            return PRIORITY.stream().filter(this::has).toList();
+        }
+
+        /**
+         * 解析前端传来的场地类型名（可多选、可乱序、可重复），忽略无法识别的值。
+         * 全部无法识别时返回 {@link #none()}，由调用方决定怎么兜底。
+         */
+        public static CourtTypes of(Collection<String> names) {
+            if (names == null || names.isEmpty()) {
+                return none();
+            }
+            CourtTypes t = none();
+            for (String raw : names) {
+                if (raw == null) {
+                    continue;
+                }
+                t = t.enable(raw.trim().toLowerCase(Locale.ROOT));
+            }
+            return t;
+        }
+
+        /**
+         * 兼容旧的单选 genderRule（0~5）。这样「男女分场」「三场并行」不再是特例，
+         * 它们只是 {男双,女双} 与 {混双,男双,女双} 两个组合而已。
+         */
+        public static CourtTypes fromLegacyRule(int genderRule) {
+            return switch (genderRule) {
+                case Constants.GENDER_RULE_MEN -> of(List.of("men"));
+                case Constants.GENDER_RULE_WOMEN -> of(List.of("women"));
+                case Constants.GENDER_RULE_MIXED -> of(List.of("mixed"));
+                case Constants.GENDER_RULE_SEPARATE -> of(List.of("men", "women"));
+                case Constants.GENDER_RULE_ALL_THREE -> of(List.of("mixed", "men", "women"));
+                default -> of(List.of("any"));
+            };
+        }
+
+        public static CourtTypes none() {
+            return new CourtTypes(false, false, false, false);
+        }
+    }
+
+    /**
+     * 一轮里各类场地各开几片。这个配额整份轮排表共用一份（基于全员男女比），
+     * 所以每轮的选人和配队都严格对齐，不会出现「这轮该开混双却临时凑不出人」的抖动。
+     *
+     * <p>同时给出选人配额：混双 / 男双场需要 {@link #maleNeed()} 个男生，
+     * 混双 / 女双场需要 {@link #femaleNeed()} 个女生，剩下 {@code any * 4} 人进不限性别场。
+     */
+    public record CourtPlan(int mixed, int men, int women, int any) {
+
+        public int total() {
+            return mixed + men + women + any;
+        }
+
+        public int maleNeed() {
+            return mixed * 2 + men * 4;
+        }
+
+        public int femaleNeed() {
+            return mixed * 2 + women * 4;
+        }
+
+        /** 开不出场地时给用户看的说明，如「2 片混双 + 1 片男双」 */
+        public String describe() {
+            StringBuilder sb = new StringBuilder();
+            appendPart(sb, mixed, "片混双");
+            appendPart(sb, men, "片男双");
+            appendPart(sb, women, "片女双");
+            appendPart(sb, any, "片不限性别");
+            return sb.toString();
+        }
+
+        private static void appendPart(StringBuilder sb, int count, String label) {
+            if (count <= 0) {
+                return;
+            }
+            if (!sb.isEmpty()) {
+                sb.append(" + ");
+            }
+            sb.append(count).append(label);
+        }
+    }
+
+    /**
+     * 按选中的场地类型分配这一轮能开几片。
+     *
+     * <p>算法分两步：
+     * <ol>
+     *   <li><b>保底</b>：按「混双 → 男双 → 女双 → 不限性别」的优先级，每种<b>选中的</b>类型先尽量各开1 片。
+     *       这一步是为了让「选了男双 + 混双」时两种场地都真的出现，
+     *       而不是被混双吃光配额、男双一片都开不出来。</li>
+     *   <li><b>补齐</b>：剩余场地按同一优先级轮转填充，谁还能开就谁开，直到开不出或场地用完。</li>
+     * </ol>
+     *
+     * <p>混双排在最前是因为它对人数最挑剔（必须 2 男 2 女），先开满它，
+     * 剩下的男 / 女必然同性别成堆，正好去开男双 / 女双；不限性别垫底，专收剩饭。
+     *
+     * @param maxCourts 最多能开几片（一般传场地数与人数共同决定的上限）
+     */
+    public CourtPlan allocateCourts(CourtTypes want, int males, int females, int maxCourts) {
+        int left = Math.max(0, maxCourts);
+        int mixed = 0;
+        int men = 0;
+        int women = 0;
+        int any = 0;
+        int restMale = males;
+        int restFemale = females;
+
+        // 第一步：每种选中的类型保底 1 片（人不够就跳过，不占用额度）
+        for (String type : want.ordered()) {
+            if (left <= 0) {
+                break;
+            }
+            if ("mixed".equals(type) && 2 <= restMale && 2 <= restFemale) {
+                mixed++;
+                left--;
+                restMale -= 2;
+                restFemale -= 2;
+            } else if ("men".equals(type) && 4 <= restMale) {
+                men++;
+                left--;
+                restMale -= 4;
+            } else if ("women".equals(type) && 4 <= restFemale) {
+                women++;
+                left--;
+                restFemale -= 4;
+            }
+            // any 不参与保底：它只是「收剩饭」的兜底类型，不该抢走专属场地的名额
+        }
+
+        // 第二步：剩余场地按优先级轮转补齐
+        boolean progress = true;
+        while (left > 0 && progress) {
+            progress = false;
+            for (String type : want.ordered()) {
+                if (left <= 0) {
+                    break;
+                }
+                if ("mixed".equals(type) && 2 <= restMale && 2 <= restFemale) {
+                    mixed++;
+                    left--;
+                    restMale -= 2;
+                    restFemale -= 2;
+                    progress = true;
+                } else if ("men".equals(type) && 4 <= restMale) {
+                    men++;
+                    left--;
+                    restMale -= 4;
+                    progress = true;
+                } else if ("women".equals(type) && 4 <= restFemale) {
+                    women++;
+                    left--;
+                    restFemale -= 4;
+                    progress = true;
+                } else if ("any".equals(type) && 4 <= restMale + restFemale) {
+                    any++;
+                    left--;
+                    // any 场地男女混用，从男生池先取，不够再从女生池补
+                    int fromMale = Math.min(4, restMale);
+                    restMale -= fromMale;
+                    restFemale -= 4 - fromMale;
+                    progress = true;
+                }
+            }
+        }
+        return new CourtPlan(mixed, men, women, any);
+    }
+
+    /**
+     * @param genderRule 双打怎么配队（旧的单选规则，等价于只勾选一种场地类型）。
+     *                   推荐改用 {@link #plan(List, int, int, int, boolean, CourtTypes)}。
      */
     public RotationPlan plan(List<RotationPlayer> players, int courts, int rounds,
                              int format, boolean balanceStrength, int genderRule) {
+        return plan(players, courts, rounds, format, balanceStrength,
+                CourtTypes.fromLegacyRule(genderRule));
+    }
+
+    /**
+     * 主入口：按「勾选了哪些场地类型」生成轮排表。
+     *
+     * @param courtTypes 允许开哪几种场地（可多选）；单打时忽略
+     */
+    public RotationPlan plan(List<RotationPlayer> players, int courts, int rounds,
+                             int format, boolean balanceStrength, CourtTypes courtTypes) {
         int perMatch = format == Constants.FORMAT_SINGLES ? 2 : 4;
         if (players == null || players.size() < perMatch) {
             throw new BizException(ErrorCode.PARAM_ERROR,
@@ -109,29 +346,18 @@ public class RotationEngine {
         if (rounds < 1 || rounds > 30) {
             throw new BizException(ErrorCode.PARAM_ERROR, "轮数需在 1-30 之间");
         }
+        // 单打时没有「男双 / 女双 / 混双」之分，场地类型不参与
+        CourtTypes want = perMatch == 4 ? courtTypes : CourtTypes.of(List.of("any"));
 
         int males = countGender(players, Constants.GENDER_MALE);
         int females = players.size() - males;
 
-        int matchPerRound = Math.min(courts, players.size() / perMatch);
-        if (perMatch == 4) {
-            // 男双 / 女双 / 混双 / 男女分场 对可上场人数有额外要求
-            if (genderRule == Constants.GENDER_RULE_MIXED) {
-                matchPerRound = Math.min(matchPerRound, Math.min(males / 2, females / 2));
-            } else if (genderRule == Constants.GENDER_RULE_MEN) {
-                matchPerRound = Math.min(matchPerRound, males / 4);
-            } else if (genderRule == Constants.GENDER_RULE_WOMEN) {
-                matchPerRound = Math.min(matchPerRound, females / 4);
-            } else if (genderRule == Constants.GENDER_RULE_SEPARATE) {
-                // 男女分场：按男女比分配场地，各性别至少 4 人才能开一片
-                matchPerRound = Math.min(matchPerRound, males / 4 + females / 4);
-            }
-        }
+        int upper = Math.min(courts, players.size() / perMatch);
+        CourtPlan courtsPlan = allocateCourts(want, males, females, upper);
+        int matchPerRound = courtsPlan.total();
         if (matchPerRound < 1) {
-            throw new BizException(ErrorCode.PARAM_ERROR,
-                    ruleHint(genderRule, perMatch, males, females));
+            throw new BizException(ErrorCode.PARAM_ERROR, typesHint(want, males, females));
         }
-        int need = matchPerRound * perMatch;
 
         Map<Long, RotationPlayer> byId = new LinkedHashMap<>();
         players.forEach(p -> byId.put(p.userId(), p));
@@ -150,9 +376,9 @@ public class RotationEngine {
 
         List<RotationRound> out = new ArrayList<>();
         for (int r = 1; r <= rounds; r++) {
-            List<RotationPlayer> picked = pickPlayers(players, need, genderRule, playCount, lastRound);
-            List<CourtMatch> matches = buildMatches(picked, matchPerRound, perMatch, format,
-                    genderRule, balanceStrength, partnerHistory, opponentHistory, byId);
+            List<RotationPlayer> picked = pickPlayers(players, courtsPlan, playCount, lastRound);
+            List<CourtMatch> matches = buildMatches(picked, courtsPlan, perMatch, format,
+                    balanceStrength, partnerHistory, opponentHistory, byId);
 
             // 应用本轮结果：更新上场 / 休息 / 搭档 / 对手历史
             List<Long> pickedIds = picked.stream().map(RotationPlayer::userId).toList();
@@ -182,68 +408,61 @@ public class RotationEngine {
         }
 
         List<PlayerStat> stats = buildStats(players, playCount, restCount, partnerHistory);
-        log.info("轮排完成: 人数={}, 场地={}, 轮数={}, 每轮{}场, 性别规则={}",
-                players.size(), courts, rounds, matchPerRound, genderRule);
+        log.info("轮排完成: 人数={}, 场地={}, 轮数={}, 每轮{}场({}), 场地类型={}",
+                players.size(), courts, rounds, matchPerRound,
+                courtsPlan.describe(), want.ordered());
         return new RotationPlan(courts, rounds, format, out, stats);
     }
 
-    private String ruleHint(int genderRule, int perMatch, int males, int females) {
-        if (genderRule == Constants.GENDER_RULE_MIXED) {
-            return "混双每场需要 2 男 2 女，当前男 " + males + " 人、女 " + females + " 人，无法开赛";
+    private String typesHint(CourtTypes want, int males, int females) {
+        List<String> need = new ArrayList<>();
+        if (want.mixed()) {
+            need.add("混双需要男女各 2 人");
         }
-        if (genderRule == Constants.GENDER_RULE_MEN) {
-            return "男双每场需要 4 名男生，当前男生 " + males + " 人，无法开赛";
+        if (want.men()) {
+            need.add("男双需要 4 名男生");
         }
-        if (genderRule == Constants.GENDER_RULE_WOMEN) {
-            return "女双每场需要 4 名女生，当前女生 " + females + " 人，无法开赛";
+        if (want.women()) {
+            need.add("女双需要 4 名女生");
         }
-        if (genderRule == Constants.GENDER_RULE_SEPARATE) {
-            return "男女分场需要男女生各至少 4 人，当前男 " + males + " 人、女 " + females + " 人";
+        if (want.any()) {
+            need.add("不限性别场地需要 4 人");
         }
-        return "场地数与人数不匹配，无法开赛";
+        String detail = need.isEmpty() ? "至少要勾选一种场地类型" : String.join("；", need);
+        return detail + "，当前男 " + males + " 人、女 " + females + " 人，无法开赛";
     }
+
+    /**
+     * 三场并行的场地分配：这一轮开几片混双、几片男双、几片女双。
+     *
+     * <p>已并入 {@link #allocateCourts(CourtTypes, int, int, int)}，此处不再单独保留。
+     */
 
     /* ---------------- 选人：少打的先上，久没打的先上 ---------------- */
 
-    private List<RotationPlayer> pickPlayers(List<RotationPlayer> players, int need, int genderRule,
+    /**
+     * 按场地配额选人：专属场地（混双 / 男双 / 女双）从对应性别的池子里挑，
+     * 不限性别场从剩下的人里补。池子内部仍按「打得少、上次早」的顺序轮换。
+     *
+     * <p>之所以先按配额分池再挑，而不是随机抽 4×场数 个人再想办法拼场地：
+     * 只有按性别分池，才能保证「选了男双就只有男双打男双」这种约束<b>必然</b>成立，
+     * 而不是靠事后校正。
+     */
+    private List<RotationPlayer> pickPlayers(List<RotationPlayer> players, CourtPlan plan,
                                              Map<Long, Integer> playCount,
                                              Map<Long, Integer> lastRound) {
-        if (genderRule == Constants.GENDER_RULE_MIXED) {
-            // 混双：男女对半，各自按「打得少的先上」挑
-            List<RotationPlayer> picked = new ArrayList<>();
-            picked.addAll(take(byGender(players, Constants.GENDER_MALE), need / 2, playCount, lastRound));
-            picked.addAll(take(byGender(players, Constants.GENDER_FEMALE), need / 2, playCount, lastRound));
-            return picked;
+        List<RotationPlayer> picked = new ArrayList<>();
+        picked.addAll(take(byGender(players, Constants.GENDER_MALE), plan.maleNeed(), playCount, lastRound));
+        picked.addAll(take(byGender(players, Constants.GENDER_FEMALE), plan.femaleNeed(), playCount, lastRound));
+        if (plan.any() > 0) {
+            // 不限性别场收剩下的：谁还没被选上都行，同样按轮换顺序挑
+            Set<Long> chosen = picked.stream().map(RotationPlayer::userId).collect(Collectors.toSet());
+            List<RotationPlayer> rest = players.stream()
+                    .filter(p -> !chosen.contains(p.userId()))
+                    .toList();
+            picked.addAll(take(rest, plan.any() * 4, playCount, lastRound));
         }
-        List<RotationPlayer> pool = players;
-        if (genderRule == Constants.GENDER_RULE_MEN) {
-            pool = byGender(players, Constants.GENDER_MALE);
-        } else if (genderRule == Constants.GENDER_RULE_WOMEN) {
-            pool = byGender(players, Constants.GENDER_FEMALE);
-        } else if (genderRule == Constants.GENDER_RULE_SEPARATE) {
-            // 男女分场：男女各自按「打得少的先上」挑
-            int perGender = need / 2;
-            if (need % 2 != 0) {
-                // 奇数：让人数多的一方多上
-                int males = countGender(players, Constants.GENDER_MALE);
-                if (males >= players.size() - males) {
-                    List<RotationPlayer> picked = new ArrayList<>();
-                    picked.addAll(take(byGender(players, Constants.GENDER_MALE), perGender + 1, playCount, lastRound));
-                    picked.addAll(take(byGender(players, Constants.GENDER_FEMALE), perGender, playCount, lastRound));
-                    return picked;
-                } else {
-                    List<RotationPlayer> picked = new ArrayList<>();
-                    picked.addAll(take(byGender(players, Constants.GENDER_MALE), perGender, playCount, lastRound));
-                    picked.addAll(take(byGender(players, Constants.GENDER_FEMALE), perGender + 1, playCount, lastRound));
-                    return picked;
-                }
-            }
-            List<RotationPlayer> picked = new ArrayList<>();
-            picked.addAll(take(byGender(players, Constants.GENDER_MALE), perGender, playCount, lastRound));
-            picked.addAll(take(byGender(players, Constants.GENDER_FEMALE), perGender, playCount, lastRound));
-            return picked;
-        }
-        return take(pool, need, playCount, lastRound);
+        return picked;
     }
 
     private List<RotationPlayer> take(List<RotationPlayer> pool, int need,
@@ -274,8 +493,17 @@ public class RotationEngine {
 
     /* ---------------- 生成一轮的所有场地对局 ---------------- */
 
-    private List<CourtMatch> buildMatches(List<RotationPlayer> picked, int matchCount, int perMatch,
-                                          int format, int genderRule, boolean balanceStrength,
+    /**
+     * 按场地配额把上场的人铺到各片场地上。
+     *
+     * <p>一条通用路径覆盖全部组合：混双场吃 2 男 + 2 女、男双场吃 4 男、女双场吃 4 女，
+     * 剩下的尾巴进不限性别场。因为 {@code pickPlayers} 已经按同一份配额分好了池子，
+     * 这里的游标取法必然凑得齐，不会出现「混双场里坐了两个男」这类脏数据。
+     *
+     * <p>每次重启都会重新洗牌，再用代价函数挑最优的一次——见 {@link #cost}。
+     */
+    private List<CourtMatch> buildMatches(List<RotationPlayer> picked, CourtPlan plan, int perMatch,
+                                          int format, boolean balanceStrength,
                                           Map<String, Integer> partnerHistory,
                                           Map<String, Integer> opponentHistory,
                                           Map<Long, RotationPlayer> byId) {
@@ -284,46 +512,58 @@ public class RotationEngine {
 
         for (int t = 0; t < RESTARTS; t++) {
             List<CourtMatch> candidate = new ArrayList<>();
-            if (genderRule == Constants.GENDER_RULE_MIXED && perMatch == 4) {
-                // 混双：男女分开洗牌，保证每片场地恰好 2 男 2 女
+            if (perMatch == 4) {
                 List<RotationPlayer> males = byGender(picked, Constants.GENDER_MALE);
                 List<RotationPlayer> females = byGender(picked, Constants.GENDER_FEMALE);
                 Collections.shuffle(males, ThreadLocalRandom.current());
                 Collections.shuffle(females, ThreadLocalRandom.current());
-                for (int k = 0; k < matchCount; k++) {
-                    List<RotationPlayer> group = new ArrayList<>();
-                    group.add(males.get(k * 2));
-                    group.add(males.get(k * 2 + 1));
-                    group.add(females.get(k * 2));
-                    group.add(females.get(k * 2 + 1));
-                    candidate.add(randomSplit(group, k + 1, format, genderRule, byId));
-                }
-            } else if (genderRule == Constants.GENDER_RULE_SEPARATE && perMatch == 4) {
-                // 男女分场：男女各自洗牌、各自配对，互不干扰
-                List<RotationPlayer> males = byGender(picked, Constants.GENDER_MALE);
-                List<RotationPlayer> females = byGender(picked, Constants.GENDER_FEMALE);
-                Collections.shuffle(males, ThreadLocalRandom.current());
-                Collections.shuffle(females, ThreadLocalRandom.current());
-                int maleCourts = Math.min(matchCount, males.size() / 4);
-                int femaleCourts = matchCount - maleCourts;
+                int maleCursor = 0;
+                int femaleCursor = 0;
                 int courtIdx = 1;
-                for (int k = 0; k < maleCourts; k++) {
-                    List<RotationPlayer> group = new ArrayList<>(
-                            males.subList(k * 4, (k + 1) * 4));
-                    candidate.add(randomSplit(group, courtIdx++, format, Constants.GENDER_RULE_MEN, byId));
+
+                // 混双场：每片 2 男 2 女，且必须跨性别配对（见 randomSplit 里的 MIXED 分支）
+                for (int k = 0; k < plan.mixed(); k++) {
+                    List<RotationPlayer> group =
+                            new ArrayList<>(males.subList(maleCursor, maleCursor + 2));
+                    maleCursor += 2;
+                    group.addAll(females.subList(femaleCursor, femaleCursor + 2));
+                    femaleCursor += 2;
+                    candidate.add(randomSplit(group, courtIdx++, format,
+                            Constants.GENDER_RULE_MIXED, byId));
                 }
-                for (int k = 0; k < femaleCourts; k++) {
-                    List<RotationPlayer> group = new ArrayList<>(
-                            females.subList(k * 4, (k + 1) * 4));
-                    candidate.add(randomSplit(group, courtIdx++, format, Constants.GENDER_RULE_WOMEN, byId));
+                // 男双场：全部是男生，怎么拆都合法
+                for (int k = 0; k < plan.men(); k++) {
+                    List<RotationPlayer> group =
+                            new ArrayList<>(males.subList(maleCursor, maleCursor + 4));
+                    maleCursor += 4;
+                    candidate.add(randomSplit(group, courtIdx++, format,
+                            Constants.GENDER_RULE_MEN, byId));
+                }
+                // 女双场：全部是女生
+                for (int k = 0; k < plan.women(); k++) {
+                    List<RotationPlayer> group =
+                            new ArrayList<>(females.subList(femaleCursor, femaleCursor + 4));
+                    femaleCursor += 4;
+                    candidate.add(randomSplit(group, courtIdx++, format,
+                            Constants.GENDER_RULE_WOMEN, byId));
+                }
+                // 不限性别场：收走两个池子剩下的尾巴，凑够 4 人一片
+                if (plan.any() > 0) {
+                    List<RotationPlayer> spare = new ArrayList<>(males.subList(maleCursor, males.size()));
+                    spare.addAll(females.subList(femaleCursor, females.size()));
+                    for (int k = 0; k < plan.any(); k++) {
+                        List<RotationPlayer> group = new ArrayList<>(spare.subList(k * 4, (k + 1) * 4));
+                        candidate.add(randomSplit(group, courtIdx++, format,
+                                Constants.GENDER_RULE_ANY, byId));
+                    }
                 }
             } else {
                 List<RotationPlayer> shuffled = new ArrayList<>(picked);
                 Collections.shuffle(shuffled, ThreadLocalRandom.current());
-                for (int k = 0; k < matchCount; k++) {
+                for (int k = 0; k < plan.total(); k++) {
                     List<RotationPlayer> group = new ArrayList<>(
                             shuffled.subList(k * perMatch, (k + 1) * perMatch));
-                    candidate.add(randomSplit(group, k + 1, format, genderRule, byId));
+                    candidate.add(randomSplit(group, k + 1, format, Constants.GENDER_RULE_ANY, byId));
                 }
             }
 

@@ -40,11 +40,23 @@ public class RotationRequest {
     private Boolean balanceStrength = true;
 
     /**
-     * 双打的性别组队规则（单打时忽略）：
-     * 0 不分性别 1 尽量男双 2 尽量女双 3 尽量混双（每队一男一女）。
+     * 双打时本轮允许开哪几种场地（<b>可多选</b>，可任意组合）：
+     * {@code mixed} 混双场（2 男 2 女）、{@code men} 男双场（4 男）、
+     * {@code women} 女双场（4 女）、{@code any} 不限性别场（4 人性别任意）。
+     *
+     * <p>例：{@code ["men","mixed"]} = 男双场打男双 + 混双场打混双。
+     * 只选 {@code ["men"]} 就不会出现任何女双 / 混双场地。
+     * 单打时该字段忽略。
+     */
+    @Size(max = 4, message = "场地类型最多选4 种")
+    private List<String> courtTypes;
+
+    /**
+     * 旧的单选性别规则（0~5）。<b>已废弃</b>，仅为兼容老客户端保留：
+     * {@code courtTypes} 非空时以它为准，否则按本字段换算成等价的场地类型组合。
      */
     @Min(value = 0, message = "性别规则参数错误")
-    @Max(value = 3, message = "性别规则参数错误")
+    @Max(value = 5, message = "性别规则参数错误")
     private Integer genderRule = 0;
 
     @Data
