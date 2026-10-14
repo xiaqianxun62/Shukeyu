@@ -35,8 +35,14 @@ public class GameMatchesResponse {
 
         private Long matchId;
 
-        /** 1单打 2男双 3女双 4混双 */
+        /** 1单打 2男双 3女双 4混双（整场口径：两队构成不一致时按 A 队定） */
         private Integer format;
+
+        /** A 队实际构成：单打 / 男双 / 女双 / 混双（性别信息不全时为 null） */
+        private String teamAFormatName;
+
+        /** B 队实际构成：单打 / 男双 / 女双 / 混双（性别信息不全时为 null） */
+        private String teamBFormatName;
 
         private List<Long> teamA;
 
@@ -76,6 +82,9 @@ public class GameMatchesResponse {
 
         /** 操作人展示名（优先昵称，回退姓名） */
         private String operatorName;
+
+        /** 操作人头像 URL（未上传时为 null，前端用首字兜底） */
+        private String operatorAvatar;
 
         /** 1 首次计分（裁判） 2 修改比分 */
         private Integer action;

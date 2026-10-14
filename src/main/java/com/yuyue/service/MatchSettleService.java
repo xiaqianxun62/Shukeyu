@@ -1,5 +1,6 @@
 package com.yuyue.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.yuyue.common.Constants;
 import com.yuyue.engine.EloCalculator;
 import com.yuyue.engine.EloCalculator.PlayerInput;
@@ -73,6 +74,53 @@ public class MatchSettleService {
                 match.getId(),
                 String.format("%.3f", results[0].expected()),
                 String.format("%.3f", results[1].expected()));
+    }
+
+    /**
+     * 撤销已结算的对局：按本场的 rating_history 流水原路退回积分与胜负场次，
+     * 再删除流水、同步 Redis 榜单。用于「录成 0:0 撤销本场」的误点补救。
+     *
+     * <p>幂等：没有流水可退时直接返回（不会重复扣分）。
+     */
+    @Transactional
+    public void rollback(MatchGame match) {
+        if (match == null || match.getId() == null) {
+            return;
+        }
+        List<RatingHistory> histories = ratingHistoryMapper.selectList(
+                new LambdaQueryWrapper<RatingHistory>()
+                        .eq(RatingHistory::getMatchId, match.getId())
+                        .orderByAsc(RatingHistory::getId));
+        if (histories.isEmpty()) {
+            log.info("对局 {} 没有结算流水，无需回退", match.getId());
+            return;
+        }
+        List<Long> idsA = split(match.getTeamA());
+        List<Long> idsB = split(match.getTeamB());
+        for (RatingHistory h : histories) {
+            User user = userMapper.selectById(h.getUserId());
+            if (user == null) {
+                continue;
+            }
+            // 该用户在本场是胜方还是负方：按当前 winner 与所属队伍判定（winner 尚未被清零）
+            boolean inA = idsA.contains(h.getUserId());
+            boolean inB = idsB.contains(h.getUserId());
+            boolean won = (inA && match.getWinner() != null && match.getWinner() == Constants.WINNER_A)
+                    || (inB && match.getWinner() != null && match.getWinner() == Constants.WINNER_B);
+            user.setRating(h.getRatingBefore());
+            user.setGamesPlayed(Math.max(0, user.getGamesPlayed() - 1));
+            if (won) {
+                user.setWinCount(Math.max(0, user.getWinCount() - 1));
+            } else if (inA || inB) {
+                user.setLossCount(Math.max(0, user.getLossCount() - 1));
+            }
+            userMapper.updateById(user);
+            rankingService.updateScore(user.getId(), user.getRating());
+            ratingHistoryMapper.deleteById(h.getId());
+
+            log.info("积分回退: user={} {} -> {} (撤销对局 {})",
+                    h.getUserId(), h.getRatingAfter(), h.getRatingBefore(), match.getId());
+        }
     }
 
     private void apply(EloCalculator.TeamResult team, Long matchId, boolean won) {

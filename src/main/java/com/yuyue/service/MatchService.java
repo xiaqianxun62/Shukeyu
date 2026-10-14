@@ -78,8 +78,13 @@ public class MatchService {
         if (match == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "对局不存在");
         }
-        if (req.getScoreA().intValue() == req.getScoreB().intValue()) {
+        // 0:0 是唯一的相同比分例外：表示「撤销本场比分」（误点救回），本场不计输赢
+        boolean reset = req.getScoreA() == 0 && req.getScoreB() == 0;
+        if (!reset && req.getScoreA().intValue() == req.getScoreB().intValue()) {
             throw new BizException(ErrorCode.PARAM_ERROR, "比分不能相同，羽毛球没有平局");
+        }
+        if (reset) {
+            return resetScore(match, operatorId);
         }
 
         boolean first = match.getWinner() == null || match.getWinner() == 0;
@@ -110,6 +115,57 @@ public class MatchService {
                 .winner(winner)
                 .gameFinished(gameFinished)
                 .build();
+    }
+
+    /**
+     * 撤销本场比分（提交 0:0）：误点比分的补救措施。
+     *
+     * <p>本场回到未计分状态（0:0、winner=0、未结算），不计输赢；
+     * 已经结算过的积分按流水原路退回（ELO、场次、胜负、Redis 榜单一起回滚）；
+     * 若球局因本场已结束，则退回「已编排」，等重新录入比分。
+     */
+    @Transactional
+    private MatchScoreResponse resetScore(MatchGame match, Long operatorId) {
+        Integer prevScoreA = match.getScoreA();
+        Integer prevScoreB = match.getScoreB();
+
+        if (match.getSettleStatus() != null && match.getSettleStatus() == Constants.SETTLE_DONE) {
+            matchSettleService.rollback(match);
+        }
+        match.setScoreA(0);
+        match.setScoreB(0);
+        match.setWinner(Constants.WINNER_NONE);
+        match.setSettleStatus(Constants.SETTLE_PENDING);
+        match.setSettleTime(null);
+        matchGameMapper.updateById(match);
+
+        writeScoreLog(match, operatorId, Constants.SCORE_ACTION_RESET, prevScoreA, prevScoreB);
+        reopenGameIfNeeded(match.getGameId());
+
+        log.info("撤销比分: match={}, 原比分 {} : {}", match.getId(), prevScoreA, prevScoreB);
+        return MatchScoreResponse.builder()
+                .matchId(match.getId())
+                .scoreA(0)
+                .scoreB(0)
+                .winner(Constants.WINNER_NONE)
+                .gameFinished(false)
+                .build();
+    }
+
+    /** 有对阵被撤销 → 球局不再是「已结束」，退回「已编排」等待重新计分 */
+    private void reopenGameIfNeeded(Long gameId) {
+        Game game = gameMapper.selectById(gameId);
+        if (game == null || game.getStatus() == null || game.getStatus() < Constants.GAME_STATUS_FINISHED) {
+            return;
+        }
+        long pending = matchGameMapper.selectCount(new LambdaQueryWrapper<MatchGame>()
+                .eq(MatchGame::getGameId, gameId)
+                .eq(MatchGame::getWinner, Constants.WINNER_NONE));
+        if (pending > 0) {
+            game.setStatus(Constants.GAME_STATUS_ARRANGED);
+            gameMapper.updateById(game);
+            log.info("球局退回已编排（有对阵撤销了比分）: game={}", gameId);
+        }
     }
 
     /** 写计分日志：记录谁提交了比分、改分时的改前比分 */

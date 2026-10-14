@@ -17,6 +17,7 @@ import com.yuyue.entity.MatchGame;
 import com.yuyue.entity.MatchScoreLog;
 import com.yuyue.entity.Registration;
 import com.yuyue.entity.User;
+import com.yuyue.util.MatchFormatUtil;
 import com.yuyue.exception.BizException;
 import com.yuyue.mapper.GameMapper;
 import com.yuyue.mapper.MatchGameMapper;
@@ -409,6 +410,8 @@ public class GameService {
                         .eq(MatchGame::getGameId, gameId)
                         .orderByAsc(MatchGame::getId));
         Map<Long, String> displayNames = displayNamesOf(gameId);
+        // 两队的性别构成：两队可能不同（男双 vs 混双），分别标注避免误导
+        Map<Long, Integer> genders = gendersOf(gameId);
         // 计分日志：每场的裁判（首次计分人）与改分历史
         Map<Long, List<GameMatchesResponse.ScoreLogItem>> scoreLogsByMatch = loadScoreLogs(list);
         List<GameMatchesResponse.MatchItem> items = list.stream()
@@ -424,6 +427,8 @@ public class GameService {
                     return GameMatchesResponse.MatchItem.builder()
                             .matchId(m.getId())
                             .format(m.getFormat())
+                            .teamAFormatName(MatchFormatUtil.sideFormatName(teamA, genders))
+                            .teamBFormatName(MatchFormatUtil.sideFormatName(teamB, genders))
                             .teamA(teamA)
                             .teamB(teamB)
                             .teamANames(teamA.stream().map(id -> name(displayNames, id)).toList())
@@ -470,6 +475,7 @@ public class GameService {
         }
         // 操作人展示名：昵称优先，回退姓名，再回退球友+id
         Map<Long, String> operatorLabels = new HashMap<>();
+        Map<Long, String> operatorAvatars = new HashMap<>();
         for (Long opId : logs.stream().map(MatchScoreLog::getOperatorId).distinct().toList()) {
             User u = userMapper.selectById(opId);
             String label = null;
@@ -479,6 +485,7 @@ public class GameService {
                 } else if (u.getName() != null && !u.getName().isBlank()) {
                     label = u.getName().trim();
                 }
+                operatorAvatars.put(opId, u.getAvatar());
             }
             operatorLabels.put(opId, label != null ? label : "球友" + opId);
         }
@@ -488,6 +495,7 @@ public class GameService {
                     .add(GameMatchesResponse.ScoreLogItem.builder()
                             .operatorId(l.getOperatorId())
                             .operatorName(operatorLabels.getOrDefault(l.getOperatorId(), "球友" + l.getOperatorId()))
+                            .operatorAvatar(operatorAvatars.get(l.getOperatorId()))
                             .action(l.getAction())
                             .scoreA(l.getScoreA())
                             .scoreB(l.getScoreB())
@@ -512,6 +520,28 @@ public class GameService {
         for (Registration r : regs) {
             String realName = realNames.get(r.getUserId());
             out.put(r.getUserId(), realName != null ? realName : "球友" + r.getUserId());
+        }
+        return out;
+    }
+
+    /**
+     * 轮排对阵里 userId 对应的性别（报名时填的优先，缺失时回退用户资料）。
+     * 用于判定两队各自的构成（男双 / 女双 / 混双）。
+     */
+    private Map<Long, Integer> gendersOf(Long gameId) {
+        List<Registration> regs = registrationMapper.selectList(
+                new LambdaQueryWrapper<Registration>().eq(Registration::getGameId, gameId));
+        Map<Long, User> userMap = loadUserMap(regs);
+        Map<Long, Integer> out = new HashMap<>();
+        for (Registration r : regs) {
+            Integer g = r.getGender();
+            if (g == null || g == 0) {
+                User u = userMap.get(r.getUserId());
+                g = u == null ? null : u.getGender();
+            }
+            if (g != null) {
+                out.put(r.getUserId(), g);
+            }
         }
         return out;
     }

@@ -16,6 +16,7 @@ import com.yuyue.entity.Registration;
 import com.yuyue.entity.User;
 import com.yuyue.exception.BizException;
 import com.yuyue.mapper.GameMapper;
+import com.yuyue.util.MatchFormatUtil;
 import com.yuyue.mapper.MatchGameMapper;
 import com.yuyue.mapper.MatchScoreLogMapper;
 import com.yuyue.mapper.RatingHistoryMapper;
@@ -78,9 +79,9 @@ public class RotationService {
         if (game == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "球局不存在");
         }
-        // 轮排表会覆盖已有安排并置球局为已编排，只能由发起人操作
-        if (!java.util.Objects.equals(game.getCreatorId(), operatorId)) {
-            throw new BizException(ErrorCode.FORBIDDEN, "只有发起人可以生成轮排表");
+        // 轮排表会覆盖已有安排并置球局为已编排，只能由发起人或管理员操作
+        if (!isAdmin(operatorId) && !java.util.Objects.equals(game.getCreatorId(), operatorId)) {
+            throw new BizException(ErrorCode.FORBIDDEN, "只有发起人或管理员可以生成轮排表");
         }
         List<Registration> regs = registrationMapper.selectList(
                 new LambdaQueryWrapper<Registration>().eq(Registration::getGameId, gameId));
@@ -163,6 +164,9 @@ public class RotationService {
 
         // 计分留痕：每场的裁判（首次计分人）与改分历史，轮排页据此展示与核对比分
         Map<Long, List<RotationResponse.ScoreLogItem>> scoreLogsByMatch = loadScoreLogs(saved);
+        // 两队的性别构成：两队可能不同（男双 vs 混双），分别标注避免显示成「混双打混双」
+        Map<Long, Integer> genders = new LinkedHashMap<>();
+        byId.forEach((id, p) -> genders.put(id, p.gender()));
 
         Map<Long, Integer> playCount = new LinkedHashMap<>();
         players.forEach(p -> playCount.put(p.userId(), 0));
@@ -193,6 +197,8 @@ public class RotationService {
                         .court(mg.getCourt())
                         .format(mg.getFormat())
                         .formatName(formatName(mg.getFormat()))
+                        .teamAFormatName(MatchFormatUtil.sideFormatName(a, genders))
+                        .teamBFormatName(MatchFormatUtil.sideFormatName(b, genders))
                         .teamA(briefs(a, byId, avatars))
                         .teamB(briefs(b, byId, avatars))
                         .sumA(sum(a, byId))
@@ -322,6 +328,7 @@ public class RotationService {
             return Map.of();
         }
         Map<Long, String> operatorLabels = new LinkedHashMap<>();
+        Map<Long, String> operatorAvatars = new LinkedHashMap<>();
         for (Long opId : logs.stream().map(MatchScoreLog::getOperatorId).distinct().toList()) {
             User u = userMapper.selectById(opId);
             String label = null;
@@ -331,6 +338,7 @@ public class RotationService {
                 } else if (u.getName() != null && !u.getName().isBlank()) {
                     label = u.getName().trim();
                 }
+                operatorAvatars.put(opId, u.getAvatar());
             }
             operatorLabels.put(opId, label != null ? label : "球友" + opId);
         }
@@ -340,6 +348,7 @@ public class RotationService {
                     .add(RotationResponse.ScoreLogItem.builder()
                             .operatorId(l.getOperatorId())
                             .operatorName(operatorLabels.getOrDefault(l.getOperatorId(), "球友" + l.getOperatorId()))
+                            .operatorAvatar(operatorAvatars.get(l.getOperatorId()))
                             .action(l.getAction())
                             .scoreA(l.getScoreA())
                             .scoreB(l.getScoreB())
@@ -378,6 +387,8 @@ public class RotationService {
 
         Map<Long, RotationEngine.RotationPlayer> byId = new LinkedHashMap<>();
         players.forEach(p -> byId.put(p.userId(), p));
+        Map<Long, Integer> genders = new LinkedHashMap<>();
+        byId.forEach((id, p) -> genders.put(id, p.gender()));
 
         List<RotationResponse.PlayerBrief> briefs = briefs(players, avatarByUser);
 
@@ -414,6 +425,8 @@ public class RotationService {
                         .court(m.court())
                         .format(m.format())
                         .formatName(formatName(m.format()))
+                        .teamAFormatName(MatchFormatUtil.sideFormatName(m.teamA(), genders))
+                        .teamBFormatName(MatchFormatUtil.sideFormatName(m.teamB(), genders))
                         .teamA(briefs(m.teamA(), byId, avatarByUser))
                         .teamB(briefs(m.teamB(), byId, avatarByUser))
                         .sumA(sum(m.teamA(), byId))
@@ -583,6 +596,12 @@ public class RotationService {
                 history.merge(keyOf(team.get(i), team.get(j)), 1, Integer::sum);
             }
         }
+    }
+
+    /** 判断 operatorId 对应用户是否管理员（user.isAdmin == 1） */
+    private boolean isAdmin(Long operatorId) {
+        User u = userMapper.selectById(operatorId);
+        return u != null && u.getIsAdmin() != null && u.getIsAdmin() == 1;
     }
 
     private int countGender(List<RotationEngine.RotationPlayer> players, int gender) {

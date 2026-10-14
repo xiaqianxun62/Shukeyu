@@ -59,8 +59,12 @@ public class RotationResponse {
         /** 场地号，从 1 开始 */
         private int court;
         private int format;
-        /** 单打 / 男双 / 女双 / 混双（按两队实际性别构成判定） */
+        /** 单打 / 男双 / 女双 / 混双（整场口径：两队构成不一致时按 A 队定） */
         private String formatName;
+        /** A 队实际构成：单打 / 男双 / 女双 / 混双（性别信息不全时为 null） */
+        private String teamAFormatName;
+        /** B 队实际构成：单打 / 男双 / 女双 / 混双（性别信息不全时为 null） */
+        private String teamBFormatName;
         private List<PlayerBrief> teamA;
         private List<PlayerBrief> teamB;
         /** 两队积分和，用于判断本场是否势均力敌 */
@@ -97,6 +101,9 @@ public class RotationResponse {
 
         /** 操作人展示名（优先昵称，回退姓名） */
         private String operatorName;
+
+        /** 操作人头像 URL（未上传时为 null，前端用首字兜底） */
+        private String operatorAvatar;
 
         /** 1 首次计分（裁判） 2 修改比分 */
         private Integer action;

@@ -44,7 +44,7 @@ public class MatchController {
      * 现场计分：给编排好的一场对阵录比分，胜方由比分自动判定。
      * 打完全部对阵后球局自动结束。允许重复提交（改分），但只结算一次积分。
      */
-    @Operation(summary = "现场计分", description = "录入某场对阵的比分，胜方自动判定；全部打完球局自动结束。首次提交者记为本场裁判，改分全程留痕")
+    @Operation(summary = "现场计分", description = "录入某场对阵的比分，胜方自动判定；全部打完球局自动结束。首次提交者记为本场裁判，改分全程留痕；提交 0:0 表示撤销本场（误点救回），不计输赢并退回已结算的积分")
     @PutMapping("{id}/score")
     @OperationLog("现场计分")
     public ApiResponse<MatchScoreResponse> score(@PathVariable Long id,

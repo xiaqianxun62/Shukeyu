@@ -46,7 +46,8 @@ public final class Constants {
     /** 随机双打：不分性别随机组队，仅用于 ELO 试算，不落库 */
     public static final int FORMAT_RANDOM_DOUBLES = 5;
 
-    /** 对局胜方：A队 / B队 */
+    /** 对局胜方：A队 / B队；0 表示还没出结果（未计分或比分已撤销） */
+    public static final int WINNER_NONE = 0;
     public static final int WINNER_A = 1;
     public static final int WINNER_B = 2;
 
@@ -79,4 +80,6 @@ public final class Constants {
     public static final int SCORE_ACTION_FIRST = 1;
     /** 计分日志动作：修改比分 */
     public static final int SCORE_ACTION_EDIT = 2;
+    /** 计分日志动作：撤销比分（录 0:0，误点救回；本场不计输赢，已结算的积分原路退回） */
+    public static final int SCORE_ACTION_RESET = 3;
 }
