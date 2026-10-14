@@ -62,7 +62,9 @@ public class MatchSettleService {
             return;
         }
 
-        EloCalculator.TeamResult[] results = eloCalculator.settle(teamA, teamB, winner);
+        EloCalculator.TeamResult[] results = eloCalculator.settle(teamA, teamB, winner,
+                match.getScoreA() == null ? 0 : match.getScoreA(),
+                match.getScoreB() == null ? 0 : match.getScoreB());
         apply(results[0], match.getId(), winner == Constants.WINNER_A);
         apply(results[1], match.getId(), winner == Constants.WINNER_B);
 
@@ -70,10 +72,10 @@ public class MatchSettleService {
         match.setSettleTime(LocalDateTime.now());
         matchGameMapper.updateById(match);
 
-        log.info("对局 {} 结算完成: A队期望={}, B队期望={}",
+        log.info("对局 {} 结算完成: A队期望={}(性别修正{}), B队期望={}(性别修正{})",
                 match.getId(),
-                String.format("%.3f", results[0].expected()),
-                String.format("%.3f", results[1].expected()));
+                String.format("%.3f", results[0].expected()), String.format("%.1f", results[0].genderAdjust()),
+                String.format("%.3f", results[1].expected()), String.format("%.1f", results[1].genderAdjust()));
     }
 
     /**
@@ -146,14 +148,18 @@ public class MatchSettleService {
             history.setDelta(r.delta());
             history.setKFactor(r.kFactor());
             history.setExpected(BigDecimal.valueOf(r.expected()).setScale(4, RoundingMode.HALF_UP));
+            history.setMarginDelta(r.marginDelta());
+            history.setGenderAdjust(BigDecimal.valueOf(team.genderAdjust()).setScale(2, RoundingMode.HALF_UP));
             ratingHistoryMapper.insert(history);
 
             // 同步 Redis 积分榜
             rankingService.updateScore(r.userId(), r.ratingAfter());
 
-            log.info("积分更新: user={} {} -> {} ({}{}, K={})",
+            log.info("积分更新: user={} {} -> {} (基础{}{}, 分差加成{}{}, K={}, E={})",
                     r.userId(), r.ratingBefore(), r.ratingAfter(),
-                    r.delta() >= 0 ? "+" : "", r.delta(), r.kFactor());
+                    r.delta() - r.marginDelta() >= 0 ? "+" : "", r.delta() - r.marginDelta(),
+                    r.marginDelta() >= 0 ? "+" : "", r.marginDelta(), r.kFactor(),
+                    String.format("%.3f", r.expected()));
         }
     }
 
@@ -161,7 +167,12 @@ public class MatchSettleService {
         return userIds.stream()
                 .map(id -> {
                     User u = userMapper.selectById(id);
-                    return u == null ? null : new PlayerInput(u.getId(), u.getRating(), u.getGamesPlayed());
+                    if (u == null) {
+                        return null;
+                    }
+                    // gender 供 ELO 性别修正使用（男双打女双/混双时压低女方期望）
+                    int gender = u.getGender() == null ? Constants.GENDER_UNKNOWN : u.getGender();
+                    return new PlayerInput(u.getId(), u.getRating(), u.getGamesPlayed(), gender);
                 })
                 .filter(p -> p != null)
                 .toList();

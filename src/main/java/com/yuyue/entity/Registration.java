@@ -24,10 +24,15 @@ public class Registration {
     /** 报名人（对外仅展示匿名昵称） */
     private Long userId;
 
-    /** 1男 2女 快照 */
+    /**
+     * 性别：1男 2女。
+     * <p>报名时从 user 表写入，之后每次生成编排表（轮排 / 自动编排）前会刷新成 user 表的当前值，
+     * 因此实际语义是「报名时 或 最近一次编排时，取最后一次写入的那个」——从未生成过编排表的球局仍是报名时的值。
+     * <p>读取时一律以 user 表为准，快照仅作兜底，见 {@code RegistrationSnapshotService}。
+     */
     private Integer gender;
 
-    /** 报名时积分快照 */
+    /** 积分：写入与刷新时机同 {@link #gender} */
     private Integer rating;
 
     /** 1 匿名 / 0 实名（Constants.ANONYMOUS_*） */

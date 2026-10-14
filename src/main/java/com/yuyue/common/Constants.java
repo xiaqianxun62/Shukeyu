@@ -21,6 +21,8 @@ public final class Constants {
 
     /* ---------- 枚举值 ---------- */
 
+    /** 性别：未知（用户未填写）。ELO 性别修正按中性处理 */
+    public static final int GENDER_UNKNOWN = 0;
     /** 性别：男 */
     public static final int GENDER_MALE = 1;
     /** 性别：女 */

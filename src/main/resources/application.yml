@@ -109,6 +109,15 @@ yuyue:
     k-new: 40       # ≤20 场
     k-mid: 24       # 21-60 场
     k-pro: 16       # >60 场
+    # 性别修正：跨赛制对局按双方性别构成折算 handicap（正=吃亏 负=占便宜）
+    gender-adjust-enabled: true
+    male-vs-female-edge: 100   # 男生面对女生时的天然优势（分）
+    female-vs-male-edge: 100   # 女生面对男生时的天然劣势（分）
+    # 局内分差动态调整：净胜分越多胜方多得越多，胜加负减同额、严格零和
+    margin-bonus-enabled: true
+    margin-win-score: 21       # 一局满分，净胜分以此为满格
+    margin-floor: 0.25         # 触发线，净胜 5 分以内不触发加成
+    margin-bonus-rate: 0.5     # 打满时胜方额外拿 K × 0.5 分
   # 个人头像上传：保存目录、对外 URL 前缀、单文件大小上限
   upload:
     # 生产环境统一用宝塔 uploads 目录（与 nginx 静态映射、multipart 临时目录同根）；

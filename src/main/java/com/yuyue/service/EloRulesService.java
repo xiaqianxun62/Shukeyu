@@ -32,10 +32,11 @@ public class EloRulesService {
 
     public EloRulesResponse rules() {
         int base = props.getDefaultRating();
+        int edge = (int) Math.round(props.getMaleVsFemaleEdge());
         return EloRulesResponse.builder()
                 .defaultRating(base)
                 .principle("ELO 浮动制：赢强的多加分、赢弱的少加分、输给弱的扣分多")
-                .formula("E = 1 / (1 + 10^((对手分 − 己方分) / 400))，Δ = K × (S − E)")
+                .formula("E = 1 / (1 + 10^(有效分差 / 400))，Δ = K × (S − E) + 分差加成")
                 .kRules(List.of(
                         kRule("≤ 20 场", SAMPLE_NEW),
                         kRule("21 – 60 场", SAMPLE_MID),
@@ -47,6 +48,14 @@ public class EloRulesService {
                 .doublesNotes(List.of(
                         "同队两人使用同一个组合期望 E（按队伍平均分计算），但各自按自己的 K（各自历史场次）更新积分",
                         "ELO 自带防刷：同一组合反复刷分，积分差拉开后强方几乎不得分"))
+                .genderNotes(List.of(
+                        "跨赛制不再只看积分：按队内每个人的性别折算「跨性别对抗成本」得到 handicap（正 = 吃亏，负 = 占便宜），折进有效分差",
+                        "男生场上对手有女生即占便宜，女生场上对手有男生即吃亏，各按对手异性占比线性折算，默认每人 " + edge + " 分",
+                        "同赛制对局双方 handicap 完全抵消，期望仍是 0.5；未填写性别的球友按中性处理，不参与修正"))
+                .marginNotes(List.of(
+                        "局内分差动态调整：净胜分超过触发线（21 分制下约净胜 5 分）后开始加分，净胜分越多加成越高，21 分打满时胜方最多额外拿 K × "
+                                + trim(props.getMarginBonusRate()) + " 分",
+                        "加成严格零和——胜方加多少，负方就扣多少，不会凭空产生积分；未录入比分的对局不受影响"))
                 .build();
     }
 
@@ -72,6 +81,12 @@ public class EloRulesService {
         list.add(singles("强打弱", base + GAP, base, "强胜弱加分少，强负弱扣分多"));
         list.add(singles("弱胜强", base, base + GAP, "爆冷奖励大"));
         list.add(doubles(base));
+        list.add(crossFormat(base, "男双打女双", false,
+                "同分也会向男双倾斜，跨赛制取胜拿不到满额分"));
+        list.add(crossFormat(base, "男双打混双", true,
+                "混双女生要顶男生的位置，期望被小幅压低"));
+        list.add(marginDoubles(base, 21, 19, "苦战局", "净胜 2 分未达触发线，只有基础分没有分差加成"));
+        list.add(marginDoubles(base, 21, 5, "碾压局", "净胜 16 分，胜方额外拿到接近上限的分差加成"));
         return list;
     }
 
@@ -123,11 +138,63 @@ public class EloRulesService {
                 .build();
     }
 
+    /** 跨赛制场景：同分男双 vs 女双/混双，性别修正让男双期望高于 0.5 */
+    private EloRulesResponse.Scenario crossFormat(int base, String scene, boolean mixedOpponent, String note) {
+        List<EloCalculator.PlayerInput> teamA = List.of(
+                new EloCalculator.PlayerInput(1L, base, SAMPLE_NEW, Constants.GENDER_MALE),
+                new EloCalculator.PlayerInput(2L, base, SAMPLE_NEW, Constants.GENDER_MALE));
+        List<EloCalculator.PlayerInput> teamB = mixedOpponent
+                // 混双：男生 + 女生
+                ? List.of(new EloCalculator.PlayerInput(3L, base, SAMPLE_NEW, Constants.GENDER_MALE),
+                        new EloCalculator.PlayerInput(4L, base, SAMPLE_NEW, Constants.GENDER_FEMALE))
+                // 女双：女生 + 女生
+                : List.of(new EloCalculator.PlayerInput(3L, base, SAMPLE_NEW, Constants.GENDER_FEMALE),
+                        new EloCalculator.PlayerInput(4L, base, SAMPLE_NEW, Constants.GENDER_FEMALE));
+        String opponentLabel = mixedOpponent ? "混双 " : "女双 ";
+        EloCalculator.TeamResult[] win = eloCalculator.settle(teamA, teamB, Constants.WINNER_A);
+        EloCalculator.TeamResult[] loss = eloCalculator.settle(teamA, teamB, Constants.WINNER_B);
+        return EloRulesResponse.Scenario.builder()
+                .scene(scene)
+                .matchup("男双 " + base + " vs " + opponentLabel + base)
+                .expect(round2(win[0].expected()))
+                .winDelta((double) win[0].players().get(0).delta())
+                .lossDelta((double) loss[0].players().get(0).delta())
+                .perPlayer(true)
+                .note(note)
+                .build();
+    }
+
+    /** 局内分差场景：同一个对手，净胜分不同带来的加分差异 */
+    private EloRulesResponse.Scenario marginDoubles(int base, int scoreA, int scoreB,
+                                                    String scene, String note) {
+        List<EloCalculator.PlayerInput> teamA = List.of(
+                new EloCalculator.PlayerInput(1L, base + GAP, SAMPLE_NEW, Constants.GENDER_MALE),
+                new EloCalculator.PlayerInput(2L, base, SAMPLE_NEW, Constants.GENDER_MALE));
+        List<EloCalculator.PlayerInput> teamB = List.of(
+                new EloCalculator.PlayerInput(3L, base, SAMPLE_NEW, Constants.GENDER_MALE),
+                new EloCalculator.PlayerInput(4L, base - GAP, SAMPLE_NEW, Constants.GENDER_MALE));
+        EloCalculator.TeamResult[] win = eloCalculator.settle(teamA, teamB, Constants.WINNER_A, scoreA, scoreB);
+        EloCalculator.TeamResult[] loss = eloCalculator.settle(teamA, teamB, Constants.WINNER_B, scoreA, scoreB);
+        return EloRulesResponse.Scenario.builder()
+                .scene(scene)
+                .matchup("均值 " + (base + GAP / 2) + " vs " + (base - GAP / 2) + "，" + scoreA + ":" + scoreB)
+                .expect(round2(win[0].expected()))
+                .winDelta((double) win[0].players().get(0).delta())
+                .lossDelta((double) loss[0].players().get(0).delta())
+                .perPlayer(true)
+                .note(note)
+                .build();
+    }
+
     private static double round1(double value) {
         return Math.round(value * 10) / 10.0;
     }
 
     private static double round2(double value) {
         return Math.round(value * 100) / 100.0;
+    }
+
+    private static String trim(double value) {
+        return String.valueOf(Math.round(value * 100) / 100.0);
     }
 }

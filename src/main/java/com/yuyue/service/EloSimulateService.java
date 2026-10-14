@@ -66,8 +66,8 @@ public class EloSimulateService {
             int winner = winnerOf(req, i);
 
             EloCalculator.TeamResult[] settled = eloCalculator.settle(
-                    inputs(m.teamA(), current, req.getGamesPlayed()),
-                    inputs(m.teamB(), current, req.getGamesPlayed()),
+                    inputs(m.teamA(), current, req.getGamesPlayed(), byId),
+                    inputs(m.teamB(), current, req.getGamesPlayed(), byId),
                     winner);
 
             List<EloSimulateResponse.SimSide> sideA = toSide(settled[0], byId, males);
@@ -162,12 +162,15 @@ public class EloSimulateService {
 
     /** 用「当前积分」构造结算输入，循环赛下即为上一场打完后的分数 */
     private List<EloCalculator.PlayerInput> inputs(List<Long> ids, Map<Long, Integer> currentRatings,
-                                                   int gamesPlayed) {
+                                                   int gamesPlayed, Map<Long, ArrangeEngine.Player> byId) {
         List<EloCalculator.PlayerInput> result = new ArrayList<>();
         for (Long id : ids) {
             Integer rating = currentRatings.get(id);
             if (rating != null) {
-                result.add(new EloCalculator.PlayerInput(id, rating, gamesPlayed));
+                // 带上性别：试算同样要走 ELO 性别修正，男双打女双/混双的期望才会与线上一致
+                ArrangeEngine.Player p = byId.get(id);
+                int gender = p == null ? Constants.GENDER_UNKNOWN : p.gender();
+                result.add(new EloCalculator.PlayerInput(id, rating, gamesPlayed, gender));
             }
         }
         return result;

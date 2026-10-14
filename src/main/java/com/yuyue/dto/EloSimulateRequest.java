@@ -36,8 +36,8 @@ public class EloSimulateRequest {
      * 赛制（与 schemeId 二选一，同时传时以 schemeId 为准）：
      * 1 单打 → 全单打方案，2 男双 → 全男双，3 女双 → 全女双，4 混双 → 全混双。
      */
-    @Min(value = 1, message = "赛制参数错误")
-    @Max(value = 4, message = "赛制仅支持 1 单打 / 2 男双 / 3 女双 / 4 混双")
+    @Min(value = 1, message = "请先选择赛制：单打、男双、女双或混双")
+    @Max(value = 4, message = "请先选择赛制：单打、男双、女双或混双")
     private Integer format;
 
     /**

@@ -36,6 +36,12 @@ public class EloRulesResponse {
     /** 双打细节说明 */
     private List<String> doublesNotes;
 
+    /** 性别修正说明（跨赛制对局） */
+    private List<String> genderNotes;
+
+    /** 局内分差动态调整说明 */
+    private List<String> marginNotes;
+
     @Data
     @Builder
     public static class KRule {

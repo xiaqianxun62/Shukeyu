@@ -54,6 +54,7 @@ public class GameService {
     private final com.yuyue.mapper.CourtMapper courtMapper;
     private final StringRedisTemplate redisTemplate;
     private final ArrangeEngine arrangeEngine;
+    private final RegistrationSnapshotService snapshotService;
 
     /**
      * 发布球局。两种模式：
@@ -347,8 +348,20 @@ public class GameService {
             throw new BizException(ErrorCode.PARAM_ERROR, "报名人数不足 4 人，无法编排");
         }
 
+        // 自动编排同样要在生成前取一遍最新资料：报名快照里存的是报名那一刻的积分与性别，
+        // 球友之后打过的比赛、改过的资料都不会回写快照
+        Map<Long, User> userMap = loadUserMap(regs);
+        int refreshed = snapshotService.refresh(regs, userMap);
+        if (refreshed > 0) {
+            log.info("自动编排前刷新报名快照: game={}, 更新 {} 人", gameId, refreshed);
+        }
         List<Player> players = regs.stream()
-                .map(r -> new Player(r.getUserId(), r.getGender(), r.getRating()))
+                .map(r -> {
+                    User u = userMap.get(r.getUserId());
+                    return new Player(r.getUserId(),
+                            snapshotService.genderOf(r, u),
+                            snapshotService.ratingOf(r, u));
+                })
                 .toList();
         boolean roundRobin = req != null && Boolean.TRUE.equals(req.getRoundRobin());
         ArrangeResult result = req != null && req.getSchemeId() != null
@@ -525,25 +538,16 @@ public class GameService {
     }
 
     /**
-     * 轮排对阵里 userId 对应的性别（报名时填的优先，缺失时回退用户资料）。
+     * 轮排对阵里 userId 对应的当前性别。
      * 用于判定两队各自的构成（男双 / 女双 / 混双）。
+     *
+     * <p>口径与编排保持一致：user 表最新值优先、报名快照兜底，
+     * 否则会出现「编排时按男队员排的，展示时却标成女队员」的错位。
      */
     private Map<Long, Integer> gendersOf(Long gameId) {
         List<Registration> regs = registrationMapper.selectList(
                 new LambdaQueryWrapper<Registration>().eq(Registration::getGameId, gameId));
-        Map<Long, User> userMap = loadUserMap(regs);
-        Map<Long, Integer> out = new HashMap<>();
-        for (Registration r : regs) {
-            Integer g = r.getGender();
-            if (g == null || g == 0) {
-                User u = userMap.get(r.getUserId());
-                g = u == null ? null : u.getGender();
-            }
-            if (g != null) {
-                out.put(r.getUserId(), g);
-            }
-        }
-        return out;
+        return snapshotService.genderMap(regs, loadUserMap(regs));
     }
 
     private static String name(Map<Long, String> names, Long userId) {
@@ -694,9 +698,10 @@ public class GameService {
                                     .userId(r.getUserId())
                                     .displayName(name)
                                     .avatar(u != null ? u.getAvatar() : null)
-                                    .gender(r.getGender())
-                                    // 用 user 表最新 rating，不用 registration 快照
-                                    .rating(u != null ? u.getRating() : r.getRating())
+                                    // 性别与积分一律用 user 表最新值，不用报名快照：
+                                    // 否则球友改过性别后，这里显示的和轮排编排实际依据的会对不上
+                                    .gender(snapshotService.genderOf(r, u))
+                                    .rating(snapshotService.ratingOf(r, u))
                                     .build();
                         })
                         .toList())

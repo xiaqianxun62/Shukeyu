@@ -313,4 +313,81 @@ class RotationEngineTest {
         }
         return n;
     }
+
+    /* ==================== 性别未知（gender=0）回归 ==================== */
+
+    /** 全部性别未知的名单，对应前端的「快速名单」试算模式 */
+    private List<RotationEngine.RotationPlayer> unknownGender(int count) {
+        List<RotationEngine.RotationPlayer> list = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            list.add(new RotationEngine.RotationPlayer((long) i, "球员" + i, Constants.GENDER_UNKNOWN, 1200));
+        }
+        return list;
+    }
+
+    @Test
+    @DisplayName("性别全未知：能排出「不限性别」轮排，不抛越界异常")
+    void unknownGenderStillArranges() {
+        RotationEngine.RotationPlan plan = engine.plan(
+                unknownGender(12), 2, 6, 2, true, types("any"));
+
+        assertEquals(2, plan.courts());
+        assertTrue(plan.rotation().size() > 0);
+        // 每片 2v2、每场 4 人，且不重复排人
+        for (RotationEngine.RotationRound r : plan.rotation()) {
+            assertEquals(2, r.matches().size());
+            assertNoDoubleBooking(r);
+            for (RotationEngine.CourtMatch m : r.matches()) {
+                assertEquals(2, m.teamA().size());
+                assertEquals(2, m.teamB().size());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("性别未知且场地多于能开的片数：自动降级，不抛异常")
+    void unknownGenderTooFewPlayers() {
+        // 4 个人只够开 1 片，场地填 3 片也应该自动收敛到 1 片，而不是炸在 subList 上。
+        // 注意 RotationPlan.courts 是「请求填了几片场地」，不是实际开出了几片，
+        // 实际片数看每轮的 matches 数量。
+        RotationEngine.RotationPlan plan = engine.plan(unknownGender(4), 3, 2, 2, true, types("any"));
+
+        assertEquals(3, plan.courts(), "courts 字段回显的是用户填写的值");
+        for (RotationEngine.RotationRound r : plan.rotation()) {
+            assertEquals(1, r.matches().size(), "4 个人每轮只该排得出 1 场");
+            assertNoDoubleBooking(r);
+        }
+    }
+
+    @Test
+    @DisplayName("人都不够凑一片场地时报可读提示，不抛数组越界")
+    void tooFewPlayersGivesFriendlyHint() {
+        BizException e = assertThrows(BizException.class, () -> engine.plan(
+                unknownGender(2), 1, 1, 2, true, types("any")));
+        assertTrue(e.getMessage().contains("至少需要"), "应给出人数不足的可读提示，实际: " + e.getMessage());
+    }
+
+    @Test
+    @DisplayName("部分人性别未知：仍能开混双场，未知性别进女池")
+    void partiallyUnknownCountsIntoFemalePool() {
+        List<RotationEngine.RotationPlayer> list = new ArrayList<>(players(6, 1));
+        // 把最后一个女生改成性别未知
+        list.set(6, new RotationEngine.RotationPlayer(7L, "待填", Constants.GENDER_UNKNOWN, 1200));
+
+        RotationEngine.RotationPlan plan = engine.plan(list, 3, 1, 2, true, types("mixed", "any"));
+
+        assertTrue(plan.courts() >= 1, "至少要开出一片场地");
+        for (RotationEngine.RotationRound r : plan.rotation()) {
+            assertNoDoubleBooking(r);
+        }
+    }
+
+    @Test
+    @DisplayName("性别未知的人不会凭空多开场地：人数守恒")
+    void unknownGenderDoesNotInflateCourts() {
+        RotationEngine.RotationPlan plan = engine.plan(
+                unknownGender(12), 2, 1, 2, true, types("any"));
+        // 12 人 / 每场 4 人 = 最多 3 片，但只有 2 片场地可用
+        assertEquals(2, plan.courts());
+    }
 }

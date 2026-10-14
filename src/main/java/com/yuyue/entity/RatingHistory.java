@@ -30,8 +30,20 @@ public class RatingHistory {
 
     private Integer kFactor;
 
-    /** 期望胜率 E */
+    /** 期望胜率 E（已含性别修正） */
     private BigDecimal expected;
+
+    /**
+     * 局内分差加成部分：胜方正、负方负，与 delta 反向对称。
+     * 净胜分在触发线以内为 0（此时 delta 完全来自 K×(S−E)）。
+     */
+    private Integer marginDelta;
+
+    /**
+     * 本场该队所属队伍的性别修正 handicap（分）：
+     * 正值表示因性别构成吃亏（期望被压低），负值表示占便宜，0 表示同赛制或中性。
+     */
+    private BigDecimal genderAdjust;
 
     private LocalDateTime createTime;
 }

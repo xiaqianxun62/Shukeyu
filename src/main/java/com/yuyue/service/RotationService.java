@@ -56,6 +56,7 @@ public class RotationService {
     private final MatchScoreLogMapper matchScoreLogMapper;
     private final RatingHistoryMapper ratingHistoryMapper;
     private final EloProperties eloProperties;
+    private final RegistrationSnapshotService snapshotService;
 
     /** 试算：直接用传入的名单 */
     public RotationResponse plan(RotationRequest req) {
@@ -89,6 +90,12 @@ public class RotationService {
             throw new BizException(ErrorCode.PARAM_ERROR, "该球局还没有人报名");
         }
         Map<Long, User> userMap = loadUserMap(regs);
+        // 生成轮排表前先重新拉一遍最新资料：报名时写下的 rating / gender 只是那一刻的快照。
+        // 报名之后球友打过的比赛改过积分、改过性别资料，快照不刷新就会开错场地、组错对手。
+        int refreshed = snapshotService.refresh(regs, userMap);
+        if (refreshed > 0) {
+            log.info("轮排前刷新报名快照: game={}, 更新 {} 人", gameId, refreshed);
+        }
         // 轮排表使用真实姓名 + 个人头像，不再使用匿名昵称
         Map<Long, String> avatars = userMap.values().stream()
                 .filter(u -> u.getAvatar() != null)
@@ -99,8 +106,8 @@ public class RotationService {
                     return new RotationEngine.RotationPlayer(
                             r.getUserId(),
                             realLabel(u),
-                            r.getGender(),
-                            r.getRating());
+                            snapshotService.genderOf(r, u),
+                            snapshotService.ratingOf(r, u));
                 })
                 .toList();
         validateGenderForRule(players, req);
@@ -149,8 +156,8 @@ public class RotationService {
                     return new RotationEngine.RotationPlayer(
                             r.getUserId(),
                             realLabel(u),
-                            r.getGender(),
-                            u == null ? r.getRating() : u.getRating());
+                            snapshotService.genderOf(r, u),
+                            snapshotService.ratingOf(r, u));
                 })
                 .toList();
         Map<Long, RotationEngine.RotationPlayer> byId = new LinkedHashMap<>();
@@ -540,6 +547,25 @@ public class RotationService {
             }
         }
         return n == 0 ? 0 : sum / n;
+    }
+
+    /**
+     * 从已保存的轮排对阵反推「轮排赛制」：单打或双打。
+     *
+     * <p>必须与 {@code RotationRequest.format} 用同一套枚举（1 单打 / 2 双打），
+     * 因为前端拿这个值回填赛制选择框、再原样提交回来。
+     *
+     * <p>而 {@code match_game.format} 存的是<b>每片场地各自的具体赛制</b>
+     * （1 单打 / 2 男双 / 3 女双 / 4 混双）：一场双打轮排里可以同时有男双场和混双场，
+     * 落库的就是 2 或 4。直接拿它当轮排赛制返回，前端回填后两个选项都不会点亮，
+     * 用户看着像「没选赛制」，一点生成就报「赛制仅支持 1 单打 / 2 双打」。
+     *
+     * <p>判据用每队人数（1 人 = 单打、2 人 = 双打），而不是读 format 字段——
+     * 这样即使库里存了历史脏数据也不会被带偏。
+     */
+    private int rotationFormatOf(MatchGame match) {
+        List<Long> team = split(match.getTeamA());
+        return team.size() <= 1 ? Constants.FORMAT_SINGLES : Constants.FORMAT_MEN_DOUBLES;
     }
 
     private String formatName(Integer format) {

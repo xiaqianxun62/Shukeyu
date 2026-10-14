@@ -341,10 +341,10 @@ public class RotationEngine {
                     "人数不足，至少需要 " + perMatch + " 人才能开始轮排");
         }
         if (courts < 1 || courts > 20) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "场地数需在 1-20 之间");
+            throw new BizException(ErrorCode.PARAM_ERROR, "一次最多开 20 片场地");
         }
         if (rounds < 1 || rounds > 30) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "轮数需在 1-30 之间");
+            throw new BizException(ErrorCode.PARAM_ERROR, "一次最多排 30 轮");
         }
         // 单打时没有「男双 / 女双 / 混双」之分，场地类型不参与
         CourtTypes want = perMatch == 4 ? courtTypes : CourtTypes.of(List.of("any"));
@@ -480,11 +480,33 @@ public class RotationEngine {
     private List<RotationPlayer> byGender(List<RotationPlayer> players, int gender) {
         List<RotationPlayer> result = new ArrayList<>();
         for (RotationPlayer p : players) {
-            if (p.gender() == gender) {
+            if (inGenderPool(p, gender)) {
                 result.add(p);
             }
         }
         return result;
+    }
+
+    /**
+     * 判断一个球友属于哪个性别池。
+     *
+     * <p><b>女池取「非男即女」</b>（gender ≠ 1），包含性别未知的球友，而不是严格要求 gender=2。
+     * 这套口径全项目必须一致，三处已经统一：
+     * <ul>
+     *   <li>{@link #plan} 统计人数用的是 {@code females = players.size() - males}</li>
+     *   <li>{@link #pairings} 判断混双用的也是 {@code gender == MALE} 否则归女</li>
+     *   <li>本方法</li>
+     * </ul>
+     *
+     * <p>一旦这里严格取 gender=2，性别未知的球友（gender=0，如小程序「快速名单」试算模式）
+     * 会<b>两边都进不去</b>：配额按「非男即女」算出「不限性别场能开 N 片」，
+     * 选人阶段却一个都挑不出来，最后在 {@code buildMatches} 里
+     * {@code spare.subList(0, 4)} 越界，把整个编排接口打成 500。
+     */
+    private boolean inGenderPool(RotationPlayer p, int gender) {
+        return gender == Constants.GENDER_FEMALE
+                ? p.gender() != Constants.GENDER_MALE
+                : p.gender() == gender;
     }
 
     private int countGender(List<RotationPlayer> players, int gender) {
@@ -551,7 +573,11 @@ public class RotationEngine {
                 if (plan.any() > 0) {
                     List<RotationPlayer> spare = new ArrayList<>(males.subList(maleCursor, males.size()));
                     spare.addAll(females.subList(femaleCursor, females.size()));
-                    for (int k = 0; k < plan.any(); k++) {
+                    // 只按实际剩下的人数开，能凑几片是几片。
+                    // 正常情况下 spare 必然够（配额就是按同一份人数算的），
+                    // 这里仍取min 是兜底：宁可少开一片，也不要再让subList 越界把接口打成 500。
+                    int anyPossible = Math.min(plan.any(), spare.size() / 4);
+                    for (int k = 0; k < anyPossible; k++) {
                         List<RotationPlayer> group = new ArrayList<>(spare.subList(k * 4, (k + 1) * 4));
                         candidate.add(randomSplit(group, courtIdx++, format,
                                 Constants.GENDER_RULE_ANY, byId));
@@ -658,7 +684,13 @@ public class RotationEngine {
         return n;
     }
 
-    /** A 队期望胜率：与 EloCalculator.settle 用的是同一个公式（队伍平均分 → E） */
+    /**
+     * A 队期望胜率：按队伍平均分算 E，用于编排时把强手拆散、让每场势均力敌。
+     * <p>这里刻意只算纯积分、不套 EloCalculator 的性别修正 handicap：
+     * 编排阶段已经按场地类型（男双/女双/混双）分好了性别池，
+     * 专项场地内双方性别构成一致、handicap 天然抵消，只有混双才存在差异——
+     * 那属于结算阶段的积分校正，不影响本处「谁跟谁配对」的判断。
+     */
     private double expectedOf(List<Long> teamA, List<Long> teamB, Map<Long, RotationPlayer> byId) {
         return eloCalculator.expected(avgRating(teamA, byId), avgRating(teamB, byId));
     }
