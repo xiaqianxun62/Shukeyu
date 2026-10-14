@@ -2683,3 +2683,11 @@
 [14/Oct/2026:17:55:26 +0800] 127.0.0.1 "GET /api/uploads/avatar_20_1791943801665_4348.jpeg HTTP/1.1" 200 3933ms
 [14/Oct/2026:17:55:28 +0800] 127.0.0.1 "POST /api/rotation/plan HTTP/1.1" 200 137435ms
 [14/Oct/2026:17:55:34 +0800] 127.0.0.1 "POST /api/rotation/plan HTTP/1.1" 200 13317ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/avatar_2_1790135254037_6703.gif HTTP/1.1" 200 4770ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/games HTTP/1.1" 200 116371ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/settings/home-poem HTTP/1.1" 200 11615ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/cover_1791444630261_6974_thumb.jpg HTTP/1.1" 200 3893ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/avatar_20_1791943801665_4348_thumb.jpg HTTP/1.1" 200 6000ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/cover_1791444630261_6974.jpg HTTP/1.1" 200 13564ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/avatar_20_1791943801665_4348.jpeg HTTP/1.1" 200 4062ms
+[14/Oct/2026:17:55:37 +0800] 127.0.0.1 "GET /api/uploads/avatar_20_1791943801665_4348.jpeg HTTP/1.1" 200 2961ms
