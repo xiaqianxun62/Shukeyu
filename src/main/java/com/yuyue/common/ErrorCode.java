@@ -23,6 +23,13 @@ public enum ErrorCode {
     GAME_CANCELLED(2005, "球局已取消"),
     GAME_TITLE_DUPLICATE(2006, "球局标题已存在，请换一个"),
     MATCH_SETTLED(3001, "对局已结算，不可重复上报"),
+    TOURNAMENT_NOT_FOUND(4001, "赛事不存在"),
+    TOURNAMENT_STATUS_ERROR(4002, "赛事状态不允许该操作"),
+    TOURNAMENT_ALREADY_DRAWN(4003, "已抽签，不能再改报名或重抽"),
+    TOURNAMENT_FULL(4004, "该组别报名已满"),
+    TOURNAMENT_ENTRY_EXISTS(4005, "你已报名该赛事，或已作为他人搭档报名"),
+    TOURNAMENT_PARTNER_INVALID(4006, "搭档不符合该组别要求"),
+    TOURNAMENT_SCORE_INVALID(4007, "比分不合法"),
     SYSTEM_ERROR(500, "系统繁忙，请稍后重试");
 
     private final int code;

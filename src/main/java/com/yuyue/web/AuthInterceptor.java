@@ -40,6 +40,15 @@ public class AuthInterceptor implements HandlerInterceptor {
     /** GET /settings/home-poem：首页诗句，官网 & 小程序首页未登录也要能拉 */
     private static final Pattern HOME_POEM = Pattern.compile(".*/settings/home-poem");
 
+    /** GET /tournaments/{id}：赛事详情 */
+    private static final Pattern TOURNAMENT_DETAIL = Pattern.compile(".*/tournaments/\\d+");
+
+    /** GET /tournaments/{id}/bracket：对阵图，未登录也要能看到赛程 */
+    private static final Pattern TOURNAMENT_BRACKET = Pattern.compile(".*/tournaments/\\d+/bracket");
+
+    /** GET /tournaments/{id}/matches：赛程录入页数据，同样公开 */
+    private static final Pattern TOURNAMENT_MATCHES = Pattern.compile(".*/tournaments/\\d+/matches");
+
     private final JwtUtil jwtUtil;
     private final StringRedisTemplate redisTemplate;
 
@@ -106,8 +115,12 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 公开只读：GET /ranking、GET /games、GET /games/{id}
+     * 公开只读：GET /ranking、GET /games、GET /games/{id}、赛事浏览相关
      * 这些接口返回的都是匿名数据（不含真实姓名），官网首页未登录时要能直接展示。
+     * <p>
+     * 赛事同理：列表 / 详情 / 对阵图 / 赛程都放出来，未登录也能逛；
+     * 登录时靠软鉴权填充UserContext，接口才能标出「你报名的」「你的比赛」。
+     * 注意 {@code /tournaments/partners/lookup} 结尾不匹配任何一条，仍需登录。
      */
     private boolean isPublicRead(HttpServletRequest request) {
         if (!"GET".equalsIgnoreCase(request.getMethod())) {
@@ -120,8 +133,12 @@ public class AuthInterceptor implements HandlerInterceptor {
         return uri.contains("/ranking") || uri.endsWith("/games")
                 || uri.endsWith("/games/title-check")
                 || uri.endsWith("/courts")
+                || uri.endsWith("/tournaments")
                 || GAME_DETAIL.matcher(uri).matches()
                 || GAME_MATCHES.matcher(uri).matches()
+                || TOURNAMENT_DETAIL.matcher(uri).matches()
+                || TOURNAMENT_BRACKET.matcher(uri).matches()
+                || TOURNAMENT_MATCHES.matcher(uri).matches()
                 || HOME_POEM.matcher(uri).matches();
     }
 

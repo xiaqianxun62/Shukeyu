@@ -82,4 +82,47 @@ public final class Constants {
     public static final int SCORE_ACTION_EDIT = 2;
     /** 计分日志动作：撤销比分（录 0:0，误点救回；本场不计输赢，已结算的积分原路退回） */
     public static final int SCORE_ACTION_RESET = 3;
+
+    /* ---------- 大型比赛（锦标赛） ---------- */
+
+    /** 赛事状态：报名中 */
+    public static final int TOURNAMENT_STATUS_OPEN = 0;
+    /** 赛事状态：已抽签（分组完成，小组赛待开打） */
+    public static final int TOURNAMENT_STATUS_DRAWN = 1;
+    /** 赛事状态：进行中（已产生第一轮对阵） */
+    public static final int TOURNAMENT_STATUS_RUNNING = 2;
+    /** 赛事状态：已结束（决赛出结果，名次已定） */
+    public static final int TOURNAMENT_STATUS_FINISHED = 3;
+    /** 赛事状态：已取消 */
+    public static final int TOURNAMENT_STATUS_CANCELLED = 4;
+
+    /** 对阵阶段：小组赛（组内单循环） */
+    public static final int TOURNAMENT_STAGE_GROUP = 1;
+    /** 对阵阶段：淘汰赛（首轮，之后逐轮推进） */
+    public static final int TOURNAMENT_STAGE_KNOCKOUT = 2;
+    /** 对阵阶段：季军赛（半决赛负者争季军） */
+    public static final int TOURNAMENT_STAGE_BRONZE = 3;
+    /** 对阵阶段：决赛 */
+    public static final int TOURNAMENT_STAGE_FINAL = 4;
+
+    /** 参赛单位状态：已报名（还没抽签） */
+    public static final int TOURNAMENT_ENTRY_REGISTERED = 0;
+    /** 参赛单位状态：已抽签进组 */
+    public static final int TOURNAMENT_ENTRY_DRAWN = 1;
+    /** 参赛单位状态：仍在赛 */
+    public static final int TOURNAMENT_ENTRY_ALIVE = 2;
+    /** 参赛单位状态：已淘汰 */
+    public static final int TOURNAMENT_ENTRY_OUT = 3;
+
+    /** 小组状态：未开始 */
+    public static final int TOURNAMENT_GROUP_PENDING = 0;
+    /** 小组状态：进行中 */
+    public static final int TOURNAMENT_GROUP_RUNNING = 1;
+    /** 小组状态：已完赛 */
+    public static final int TOURNAMENT_GROUP_DONE = 2;
+
+    /** 淘汰赛最小规模：低于此规模不产生淘汰赛，直接按小组成绩定名次 */
+    public static final int TOURNAMENT_MIN_KNOCKOUT_SIZE = 4;
+    /** 淘汰赛最大规模：签位上限，防止配置写错导致一次生成过多对阵 */
+    public static final int TOURNAMENT_MAX_KNOCKOUT_SIZE = 256;
 }
