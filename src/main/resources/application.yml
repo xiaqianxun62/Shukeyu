@@ -19,7 +19,7 @@ spring:
   application:
     name: yuyue-backend
   datasource:
-    url: jdbc:mariadb://${MYSQL_HOST:42.193.190.232}:${MYSQL_PORT:3306}/yuyue?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: jdbc:mariadb://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/yuyue?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USER:265147}
     password: ${MYSQL_PASSWORD:265147}
     driver-class-name: org.mariadb.jdbc.Driver
@@ -31,9 +31,9 @@ spring:
     enabled: true
     locations: classpath:db/migration
     encoding: UTF-8
-    # 已有表但无迁移记录时自动建立基线，避免报 "non-empty schema but no schema history table"
+    # 已有表但无迁移记录时自动建立基线，避免报错
     baseline-on-migrate: true
-    # 允许迁移版本号不连续、跳过 orphan 记录（线上 schema_history 里有一个 V17 本地缺失）
+    # 允许迁移版本号不连续、跳过缺少的orphan 记录
     validate-on-migrate: false
     out-of-order: true
   data:
