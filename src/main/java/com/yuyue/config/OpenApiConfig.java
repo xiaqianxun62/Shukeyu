@@ -24,7 +24,7 @@ public class OpenApiConfig {
     public OpenAPI yuyueOpenApi() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("数羽 SHUYU - 校园羽毛球球局系统 API")
+                        .title("数科羽 shukeyu - 校园羽毛球球局系统 API")
                         .description("""
                                 球局发布 / 匿名报名 / 自动编排 / 对局上报 / ELO 积分结算 / 积分榜。
 

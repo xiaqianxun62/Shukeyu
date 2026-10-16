@@ -1,4 +1,4 @@
-# 数羽 SHUYU - 后端服务
+# 数科羽 shukeyu - 后端服务
 
 校园羽毛球球局系统后端：**Java 17 + Spring Boot 3.3 + Redis + MySQL + MyBatis-Plus**
 

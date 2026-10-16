@@ -1,4 +1,4 @@
--- 数羽 SHUYU 校园羽毛球球局系统 表结构初始化（Flyway V1）
+-- 数科羽 shukeyu 校园羽毛球球局系统 表结构初始化（Flyway V1）
 -- 注意：数据库本身由 JDBC 参数 createDatabaseIfNotExist=true 自动创建，
 --       Flyway 只负责表结构，因此本脚本不包含 CREATE DATABASE / USE 语句。
 -- 文件名规则：V<版本>__<描述>.sql（双下划线），版本号只能递增，已执行的脚本不可修改。
