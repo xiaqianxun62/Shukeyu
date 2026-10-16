@@ -18,6 +18,9 @@ server:
 spring:
   application:
     name: yuyue-backend
+  # JSON 序列化统一上海时间（Date/Instant 等带时区类型；LocalDateTime 本身无时区，原样输出）
+  jackson:
+    time-zone: Asia/Shanghai
   datasource:
     url: jdbc:mariadb://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/yuyue?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USER:265147}
@@ -26,6 +29,10 @@ spring:
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
+      # 会话时区固定 +8：SQL 里的 NOW() / DEFAULT CURRENT_TIMESTAMP 落库即上海时间，
+      # 与 JVM 默认时区（见 YuyueApplication.main）保持一致。
+      # 用数字偏移而不是 'Asia/Shanghai'：数据库无需加载时区表，MySQL / MariaDB 通用。
+      connection-init-sql: SET time_zone = '+8:00'
   # Flyway 负责建表；数据库由上面的 createDatabaseIfNotExist=true 自动创建
   flyway:
     enabled: true

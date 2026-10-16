@@ -60,6 +60,16 @@ com.yuyue
 
 大型比赛全生命周期：赛事创建 → 报名（可配对双打搭档）→ 抽签 → 小组赛积分榜 → 淘汰赛对阵图 → 逐场录分 → 最终名次。
 
+### 统一时区（Asia/Shanghai）
+
+入库时间统一为上海时间，由三层配合保证，**与服务器所在时区无关**：
+
+1. **JVM 默认时区**：`YuyueApplication.main()` 启动时 `TimeZone.setDefault(Asia/Shanghai)`，所有 `LocalDateTime.now()` / `LocalDate.now()` / 定时任务 / 日志时间戳均按上海时间走
+2. **DB 会话时区**：Hikari `connection-init-sql: SET time_zone = '+8:00'`，每个连接建立时固定会话时区，SQL 里的 `NOW()` / `DEFAULT CURRENT_TIMESTAMP`（create_time / update_time 列）落库即上海时间。用数字偏移而非时区名，数据库无需加载时区表
+3. **JSON 序列化**：`spring.jackson.time-zone: Asia/Shanghai`，带时区类型（Date/Instant）输出上海时间
+
+> JDBC URL 里的 `serverTimezone=Asia/Shanghai` 只影响 `Timestamp` 类型转换，不能替代以上两层；已有脏数据（时区偏差 8 小时的历史行）需另行订正，代码层不会自动重写。
+
 ### 对局结算（同步）
 
 上报对局结果与现场计分均在**同一事务内同步**调用 `MatchSettleService`：更新 user 积分、写 rating_history、刷 Redis 榜单。按 `settle_status` 幂等，重复提交（改分）不会重复加分；提交 0:0 撤销本场会退回已结算积分。
