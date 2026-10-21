@@ -51,6 +51,28 @@ public final class MatchFormatUtil {
     }
 
     /**
+     * 对局形式 → ELO 类别：1单打→单打，2男双/3女双→双打（同性别），4混双→混双，
+     * 5随机双打（仅试算）按双打计；无法识别按单打兜底。
+     */
+    public static int categoryOfFormat(int format) {
+        return switch (format) {
+            case Constants.FORMAT_MEN_DOUBLES, Constants.FORMAT_WOMEN_DOUBLES,
+                 Constants.FORMAT_RANDOM_DOUBLES -> Constants.CATEGORY_DOUBLES;
+            case Constants.FORMAT_MIXED_DOUBLES -> Constants.CATEGORY_MIXED;
+            default -> Constants.CATEGORY_SINGLES;
+        };
+    }
+
+    /** ELO 类别展示名：单打 / 双打 / 混双 */
+    public static String categoryName(int category) {
+        return switch (category) {
+            case Constants.CATEGORY_DOUBLES -> "双打";
+            case Constants.CATEGORY_MIXED -> "混双";
+            default -> "单打";
+        };
+    }
+
+    /**
      * 是否是<b>可落库</b>的赛制值。
      *
      * <p>注意不含 {@link Constants#FORMAT_RANDOM_DOUBLES}——随机双打只用于 ELO 试算，

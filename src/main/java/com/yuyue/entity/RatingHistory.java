@@ -22,6 +22,9 @@ public class RatingHistory {
 
     private Long matchId;
 
+    /** ELO 类别：1单打 2双打 3混双（V30 起有值，旧流水按 match format 回填） */
+    private Integer category;
+
     private Integer ratingBefore;
 
     private Integer ratingAfter;

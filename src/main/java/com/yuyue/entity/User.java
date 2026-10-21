@@ -53,7 +53,7 @@ public class User {
 
     private String passwordHash;
 
-    /** ELO 积分 */
+    /** ELO 积分（综合 = 三类分均值，结算时刷新） */
     private Integer rating;
 
     /** 历史场次 */
@@ -62,6 +62,36 @@ public class User {
     private Integer winCount;
 
     private Integer lossCount;
+
+    /* ---------- 分类 ELO：单打 ---------- */
+
+    private Integer ratingSingles;
+
+    private Integer singlesWin;
+
+    private Integer singlesLoss;
+
+    private Integer singlesPlayed;
+
+    /* ---------- 分类 ELO：同性别双打（男双+女双） ---------- */
+
+    private Integer ratingDoubles;
+
+    private Integer doublesWin;
+
+    private Integer doublesLoss;
+
+    private Integer doublesPlayed;
+
+    /* ---------- 分类 ELO：混双 ---------- */
+
+    private Integer ratingMixed;
+
+    private Integer mixedWin;
+
+    private Integer mixedLoss;
+
+    private Integer mixedPlayed;
 
     @TableLogic
     private Integer deleted;

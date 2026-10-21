@@ -48,8 +48,18 @@ public class EloSimulateService {
 
         // 赛制（单打/男双/女双/混双）优先转成对应的编排方案；指定了方案则直接用方案
         Integer schemeId = req.getSchemeId();
-        if (schemeId == null && req.getFormat() != null) {
-            schemeId = schemeOfFormat(req.getFormat(), males, females);
+        Integer format = req.getFormat();
+        if (schemeId == null && format == null && req.getCategory() != null) {
+            // 前端选了试算类别但没选赛制：按类别预设（双打按人数猜男双/女双）
+            format = switch (req.getCategory()) {
+                case Constants.CATEGORY_DOUBLES ->
+                        males >= females && males >= 4 ? Constants.FORMAT_MEN_DOUBLES : Constants.FORMAT_WOMEN_DOUBLES;
+                case Constants.CATEGORY_MIXED -> Constants.FORMAT_MIXED_DOUBLES;
+                default -> Constants.FORMAT_SINGLES;
+            };
+        }
+        if (schemeId == null && format != null) {
+            schemeId = schemeOfFormat(format, males, females);
         }
 
         // 指定了方案就按方案编排，否则按性别构成自动过滤

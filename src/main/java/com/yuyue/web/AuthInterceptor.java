@@ -143,7 +143,8 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || TOURNAMENT_BRACKET.matcher(uri).matches()
                 || TOURNAMENT_MATCHES.matcher(uri).matches()
                 || HOME_POEM.matcher(uri).matches()
-                || HOME_NOTICE.matcher(uri).matches();
+                || HOME_NOTICE.matcher(uri).matches()
+                || uri.endsWith("/stats/overview");
     }
 
     @Override

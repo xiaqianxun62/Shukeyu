@@ -31,6 +31,26 @@ public class AuthResponse {
 
     private Integer gamesPlayed;
 
+    /* ---------- 分类 ELO：单打 / 双打 / 混双（个人页明细展示） ---------- */
+
+    private Integer ratingSingles;
+
+    private Integer singlesWin;
+
+    private Integer singlesLoss;
+
+    private Integer ratingDoubles;
+
+    private Integer doublesWin;
+
+    private Integer doublesLoss;
+
+    private Integer ratingMixed;
+
+    private Integer mixedWin;
+
+    private Integer mixedLoss;
+
     /** 是否管理员（后端 user.isAdmin） */
     private Boolean isAdmin;
 

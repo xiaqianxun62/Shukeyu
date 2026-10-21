@@ -11,7 +11,7 @@ com.yuyue
 ├── aspect         # @OperationLog 操作日志切面（AOP）
 ├── common         # ApiResponse / ErrorCode / GlobalExceptionHandler / Constants
 ├── config         # JWT / ELO / CORS / WebMvc / OpenAPI / 上传 配置
-├── controller     # 13 个 REST 控制器（见下方 API 一览）
+├── controller     # 14 个 REST 控制器（见下方 API 一览）
 ├── dto            # 请求与响应 DTO（jakarta validation 校验）
 ├── engine         # 核心引擎
 │   ├── EloCalculator    # ELO 计算（K 因子衰减 / 双打组合期望 / 防刷）
@@ -25,7 +25,7 @@ com.yuyue
 │                  # RankingService / RotationService / TournamentService /
 │                  # VerificationService / SettingsService / VisitLogService /
 │                  # CaptchaService / EloSimulateService / EloRulesService /
-│                  # GameCleanupService / RegistrationSnapshotService / WeChatService
+│                  # StatsService / GameCleanupService / RegistrationSnapshotService / WeChatService
 ├── util           # JwtUtil / ImageUtils / MatchFormatUtil
 └── web            # AuthInterceptor / 访问日志拦截器 / UserContext
 ```
@@ -38,6 +38,14 @@ com.yuyue
 - **K 因子按场次衰减**：≤20 场 K=40，21-60 场 K=24，>60 场 K=16（新手波动大、老手稳定）
 - **双打**：同队两人共用组合期望 E（按队伍平均分计算），但**各自按自己的 K** 更新
 - **防刷**：积分差拉开后强方 E 趋近 1，胜方几乎不得分
+
+### 分类 ELO（单打 / 双打 / 混双）
+
+- **归类依据** `match_game.format`：`1单打→单打`、`2男双/3女双→双打（同性别）`、`4混双→混双`（`MatchFormatUtil.categoryOfFormat` 唯一出口）
+- `user` 表三套独立积分与胜负场：`rating_singles/singles_win/singles_loss/singles_played`（doubles、mixed 同构）；三类初始值均取历史综合分（V29 迁移）
+- 全局 `rating` 综合展示 = **三类均值**，结算/撤销时刷新；`gamesPlayed/winCount/lossCount` 仍按总场次累加
+- `rating_history.category` 记录每笔流水的类别（V30 起），撤销按流水类别精确回退
+- 积分榜按类别三张 ZSet，`GET /ranking?type=` 切换（见 Redis 与 API 一节）
 
 ### 自动编排（ArrangeEngine）
 
@@ -72,20 +80,22 @@ com.yuyue
 
 ### 对局结算（同步）
 
-上报对局结果与现场计分均在**同一事务内同步**调用 `MatchSettleService`：更新 user 积分、写 rating_history、刷 Redis 榜单。按 `settle_status` 幂等，重复提交（改分）不会重复加分；提交 0:0 撤销本场会退回已结算积分。
+上报对局结果与现场计分均在**同一事务内同步**调用 `MatchSettleService`：按 `match_game.format` 归入单打/双打/混双类别，更新该类别的 user 积分与胜负场（全局综合分为三类均值）、写 `rating_history`（含类别）、刷对应类别的 Redis 榜单。按 `settle_status` 幂等，重复提交（改分）不会重复加分；提交 0:0 撤销本场会按流水类别退回已结算积分。
 
 ### Redis
 
-- `yuyue:ranking:elo`（ZSet）：积分榜热点读，官网与小程序同源；每 10 分钟从 MySQL 全量校准，miss 时自动回源重建
+- `yuyue:ranking:elo`（ZSet）：**单打榜**热点读（存量 key 复用，历史数据无缝过渡），官网与小程序同源
+- `yuyue:ranking:elo:doubles` / `yuyue:ranking:elo:mixed`（ZSet）：**双打榜 / 混双榜**；每 10 分钟从 MySQL 按类别全量校准，对应榜 miss 时自动回源重建
 - `yuyue:game:reg:count`（Hash）：报名人数计数缓存
 - `yuyue:jwt:blacklist`（Set）：登出 token 黑名单
+- `yuyue:settings:*`（Hash）：站点文案 / 首页弹窗公告配置（零表依赖）
 
 ## API 一览
 
 除以下公开接口外，均需 `Authorization: Bearer <token>`：
 
 - **免登录入口**：`/auth/captcha` `/auth/name-check` `/auth/register` `/auth/login` `/auth/wxlogin`、`/elo/**`（试算工具）、`/rotation/plan`、`/uploads/**`、`/actuator/**`
-- **公开只读**（GET，带 token 时软鉴权、用于标记「我的」）：`/ranking*`、`/games` 列表与详情、`/games/{id}/matches`、`/games/title-check`、`/courts`、`/tournaments` 列表与详情/对阵图/赛程、`/settings/home-poem`
+- **公开只读**（GET，带 token 时软鉴权、用于标记「我的」）：`/ranking*`、`/games` 列表与详情、`/games/{id}/matches`、`/games/title-check`、`/courts`、`/tournaments` 列表与详情/对阵图/赛程、`/settings/home-poem`、`/settings/home-notice`、`/stats/overview`
 
 注意：`/tournaments/partners/lookup` 虽是 GET 但不匹配公开规则，仍需登录；`/rotation/game/**`（球局轮排）也需登录。
 
@@ -128,8 +138,8 @@ com.yuyue
 |------|------|------|
 | POST | `/api/matches` | 上报对局结果，同步结算 ELO |
 | PUT  | `/api/matches/{id}/score` | 现场计分（改分留痕；0:0 撤销本场并退分） |
-| GET  | `/api/ranking?n=10` | 积分榜 Top N |
-| GET  | `/api/ranking/rebuild` | 全量重建 Redis 榜单 |
+| GET  | `/api/ranking?n=10&type=1` | 积分榜 Top N；type：1单打(默认) 2双打 3混双，积分与胜负均为该类别口径 |
+| GET  | `/api/ranking/rebuild` | 全量重建三张 Redis 榜单 |
 | GET  | `/api/me/matches` | 我的历史场次 |
 | GET  | `/api/me/rating-history` | 我的积分变动曲线 |
 
@@ -140,7 +150,7 @@ com.yuyue
 | POST | `/api/rotation/plan` | 轮排试算（纯计算不落库） |
 | POST | `/api/rotation/game/{gameId}` | 按球局报名名单生成轮排（落库可计分，仅发起人） |
 | GET  | `/api/rotation/game/{gameId}` | 还原球局已生成的轮排表 |
-| POST | `/api/elo/simulate` | ELO 编排+结算试算（不写库） |
+| POST | `/api/elo/simulate` | ELO 编排+结算试算（不写库；`category` 1单打 2双打 3混双 用于未选赛制时预设） |
 | GET  | `/api/elo/rules` | K 因子档位与典型场景加减分 |
 
 ### 赛事 `tournaments`
@@ -159,6 +169,12 @@ com.yuyue
 | DELETE | `/api/tournaments/{id}/entries/{entryId}` | 取消报名 |
 | PUT  | `/api/tournaments/matches/{matchId}/score` | 赛程录分 |
 
+### 数据概览 `stats`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/stats/overview` | 官网首页数据看板（公开聚合数据，无个人信息）：用户/球局/对局/报名总量、近 7 日场次趋势、ELO 四段分布 |
+
 ### 管理与站点 `courts` / `verification` / `settings` / `visit-logs`
 
 | 方法 | 路径 | 说明 |
@@ -171,6 +187,8 @@ com.yuyue
 | GET  | `/api/verification/random` | 随机抽一题（用户端） |
 | POST | `/api/verification/submit` | 提交答案，答对通过身份校验 |
 | GET/PUT | `/api/settings/home-poem` | 首页诗句文案（公开读 / 管理员改） |
+| GET/PUT | `/api/settings/home-notice` | 首页弹窗公告：开关/频率(每天·每次·一次)/颜色/宽高/媒体，内容更新 version 自增触发重弹（公开读 / 管理员改） |
+| POST | `/api/settings/upload-notice-media` | 上传公告配图/视频（管理员，multipart `file`，返回 `/uploads/xxx`） |
 | GET  | `/api/visit-logs?ip=&limit=` | 访问日志（管理员，按 IP 过滤） |
 
 ## 接口文档（Swagger UI）
@@ -201,7 +219,7 @@ mvn spring-boot:run
 表结构在应用启动时由 Flyway 自动执行，**不需要手动建库或建表**：
 
 - 迁移脚本目录：`src/main/resources/db/migration`，命名规则 `V<版本>__<描述>.sql`（注意是双下划线）
-- 已执行过的脚本**不可再修改**（Flyway 会校验 checksum 并报错），新增变更请追加更高版本号的 SQL（当前已到 V28）
+- 已执行过的脚本**不可再修改**（Flyway 会校验 checksum 并报错），新增变更请追加更高版本号的 SQL（当前已到 V31）
 - 数据库本身由 JDBC 参数 `createDatabaseIfNotExist=true` 自动创建，无需 `CREATE DATABASE`
 - `baseline-on-migrate: true`：库中已有表但没有 Flyway 记录时（例如早期手工执行过 SQL），会自动建立基线而不是报错
 - 执行记录保存在 `flyway_schema_history` 表，可直接查询迁移状态
@@ -225,5 +243,5 @@ mvn test   # EloCalculatorTest + ArrangeEngineTest + TournamentEngineTest + Rota
 
 ## 相关项目
 
-- PC 官网 / 管理后台：[shukeyu-vue](../shukeyu-vue)（Vue 3 + Vite）
-- 微信小程序 / H5：[shukeyu-wxapp](../shukeyu-wxapp)（uni-app）
+- PC 官网 / 管理后台：[../yuyue-vue](../yuyue-vue)（Vue 3 + Vite）
+- 微信小程序 / H5：[../yuyue-wxapp](../yuyue-wxapp)（uni-app）

@@ -10,8 +10,12 @@ public final class Constants {
 
     /* ---------- Redis Keys ---------- */
 
-    /** 积分榜 ZSet：member=userId, score=rating */
+    /** 积分榜 ZSet：member=userId, score=rating（复用为单打榜，存量数据无缝过渡） */
     public static final String RANKING_ZSET = "yuyue:ranking:elo";
+    /** 双打积分榜 ZSet（同性别双打：男双+女双） */
+    public static final String RANKING_ZSET_DOUBLES = "yuyue:ranking:elo:doubles";
+    /** 混双积分榜 ZSet */
+    public static final String RANKING_ZSET_MIXED = "yuyue:ranking:elo:mixed";
 
     /** 球局报名人数 Hash：field=gameId, value=count */
     public static final String GAME_REG_COUNT = "yuyue:game:reg:count";
@@ -47,6 +51,13 @@ public final class Constants {
     public static final int FORMAT_MIXED_DOUBLES = 4;
     /** 随机双打：不分性别随机组队，仅用于 ELO 试算，不落库 */
     public static final int FORMAT_RANDOM_DOUBLES = 5;
+
+    /** ELO 类别：单打 */
+    public static final int CATEGORY_SINGLES = 1;
+    /** ELO 类别：同性别双打（男双+女双） */
+    public static final int CATEGORY_DOUBLES = 2;
+    /** ELO 类别：混双 */
+    public static final int CATEGORY_MIXED = 3;
 
     /** 对局胜方：A队 / B队；0 表示还没出结果（未计分或比分已撤销） */
     public static final int WINNER_NONE = 0;

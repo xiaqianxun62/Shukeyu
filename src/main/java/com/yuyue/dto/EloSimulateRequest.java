@@ -52,4 +52,12 @@ public class EloSimulateRequest {
 
     /** 每场对阵的胜方：1=A队 2=B队；为空或长度不符时默认 A 队胜 */
     private List<Integer> winners;
+
+    /**
+     * 试算类别（前端选择 单打/双打/混双 后传）：1单打 2双打 3混双。
+     * 未显式传 format/schemeId 时按类别预设赛制；前端通常还会传对应类别的积分作输入。
+     */
+    @Min(value = 1, message = "试算类别无效")
+    @Max(value = 3, message = "试算类别无效")
+    private Integer category;
 }
