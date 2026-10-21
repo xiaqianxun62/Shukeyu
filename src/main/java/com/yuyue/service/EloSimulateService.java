@@ -8,6 +8,7 @@ import com.yuyue.dto.EloSimulateResponse;
 import com.yuyue.engine.ArrangeEngine;
 import com.yuyue.engine.EloCalculator;
 import com.yuyue.exception.BizException;
+import com.yuyue.util.MatchFormatUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -212,14 +213,8 @@ public class EloSimulateService {
         return w == Constants.WINNER_B ? Constants.WINNER_B : Constants.WINNER_A;
     }
 
+    /** 赛制文案统一走 MatchFormatUtil，避免与 RotationService / TournamentService 各写一份 */
     private String formatName(int format) {
-        return switch (format) {
-            case Constants.FORMAT_SINGLES -> "单打";
-            case Constants.FORMAT_MEN_DOUBLES -> "男双";
-            case Constants.FORMAT_WOMEN_DOUBLES -> "女双";
-            case Constants.FORMAT_MIXED_DOUBLES -> "混双";
-            case Constants.FORMAT_RANDOM_DOUBLES -> "随机双打";
-            default -> "未知";
-        };
+        return MatchFormatUtil.formatName(format);
     }
 }

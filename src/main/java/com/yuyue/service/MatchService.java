@@ -26,6 +26,7 @@ import java.util.StringJoiner;
 public class MatchService {
 
     private final MatchGameMapper matchGameMapper;
+    private final MatchGameWriter matchGameWriter;
     private final GameMapper gameMapper;
     private final MatchSettleService matchSettleService;
     private final MatchScoreLogMapper matchScoreLogMapper;
@@ -40,16 +41,8 @@ public class MatchService {
             throw new BizException(ErrorCode.PARAM_ERROR, "单打每队 1 人，双打每队 2 人");
         }
 
-        MatchGame match = new MatchGame();
-        match.setGameId(req.getGameId());
-        match.setFormat(req.getFormat());
-        match.setTeamA(join(req.getTeamA()));
-        match.setTeamB(join(req.getTeamB()));
-        match.setScoreA(req.getScoreA());
-        match.setScoreB(req.getScoreB());
-        match.setWinner(req.getWinner());
-        match.setSettleStatus(Constants.SETTLE_PENDING);
-        matchGameMapper.insert(match);
+        MatchGame match = matchGameWriter.report(req.getGameId(), req.getFormat(),
+                req.getTeamA(), req.getTeamB(), req.getScoreA(), req.getScoreB(), req.getWinner());
 
         // 计分留痕：上报即视为该用户首次计分（裁判）
         writeScoreLog(match, operatorId, Constants.SCORE_ACTION_FIRST, null, null);
@@ -204,11 +197,5 @@ public class MatchService {
             log.info("球局已结束（全部对阵计分完成）: game={}", gameId);
         }
         return true;
-    }
-
-    private String join(Iterable<Long> ids) {
-        StringJoiner sj = new StringJoiner(",");
-        ids.forEach(id -> sj.add(String.valueOf(id)));
-        return sj.toString();
     }
 }

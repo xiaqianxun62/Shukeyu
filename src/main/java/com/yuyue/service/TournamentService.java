@@ -25,6 +25,7 @@ import com.yuyue.mapper.TournamentGroupMapper;
 import com.yuyue.mapper.TournamentMatchMapper;
 import com.yuyue.mapper.TournamentMapper;
 import com.yuyue.mapper.UserMapper;
+import com.yuyue.util.MatchFormatUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -79,12 +80,6 @@ public class TournamentService {
     private final TournamentEngine engine;
 
     /* ==================== 文案映射 ==================== */
-
-    private static final Map<Integer, String> FORMAT_NAMES = Map.of(
-            Constants.FORMAT_SINGLES, "单打",
-            Constants.FORMAT_MEN_DOUBLES, "男双",
-            Constants.FORMAT_WOMEN_DOUBLES, "女双",
-            Constants.FORMAT_MIXED_DOUBLES, "混双");
 
     private static final Map<Integer, String> TOURNAMENT_STATUS_NAMES = Map.of(
             Constants.TOURNAMENT_STATUS_OPEN, "报名中",
@@ -1558,12 +1553,12 @@ public class TournamentService {
     }
 
     private String formatName(int format) {
-        return FORMAT_NAMES.getOrDefault(format, "未知组别");
+        return MatchFormatUtil.formatName(format);
     }
 
     /** 每队人数：单打 1，其余 2 */
     private int teamSize(int format) {
-        return format == Constants.FORMAT_SINGLES ? 1 : 2;
+        return MatchFormatUtil.teamSize(format);
     }
 
     private List<Integer> parseFormats(String formatList) {
@@ -1575,7 +1570,7 @@ public class TournamentService {
         for (String s : formatList.split(",")) {
             try {
                 int f = Integer.parseInt(s.trim());
-                if (FORMAT_NAMES.containsKey(f)) {
+                if (MatchFormatUtil.isStorableFormat(f)) {
                     out.add(f);
                 }
             } catch (NumberFormatException ignored) {
@@ -1592,7 +1587,7 @@ public class TournamentService {
         }
         List<Integer> out = new ArrayList<>(new LinkedHashSet<>(formats));
         for (int f : out) {
-            if (!FORMAT_NAMES.containsKey(f)) {
+            if (!MatchFormatUtil.isStorableFormat(f)) {
                 throw new BizException(ErrorCode.PARAM_ERROR, "未知组别：" + f);
             }
         }

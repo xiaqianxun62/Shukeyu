@@ -49,6 +49,7 @@ public class GameService {
     private final GameMapper gameMapper;
     private final RegistrationMapper registrationMapper;
     private final MatchGameMapper matchGameMapper;
+    private final MatchGameWriter matchGameWriter;
     private final MatchScoreLogMapper matchScoreLogMapper;
     private final UserMapper userMapper;
     private final com.yuyue.mapper.CourtMapper courtMapper;
@@ -369,27 +370,13 @@ public class GameService {
                 : arrangeEngine.arrange(players, roundRobin);
 
         // 已经打出比分的对阵不能丢，有战绩就不许重排
-        long scored = matchGameMapper.selectCount(new LambdaQueryWrapper<MatchGame>()
-                .eq(MatchGame::getGameId, gameId)
-                .ne(MatchGame::getWinner, 0));
-        if (scored > 0) {
+        if (matchGameWriter.hasScoredMatches(gameId)) {
             throw new BizException(ErrorCode.GAME_STATUS_ERROR, "已有对阵录入比分，不能重新编排");
         }
-        // 清掉上一次编排出来的空对阵，落这一批
-        matchGameMapper.delete(new LambdaQueryWrapper<MatchGame>()
-                .eq(MatchGame::getGameId, gameId)
-                .eq(MatchGame::getWinner, 0));
+        // 清掉上一次编排出来的空对阵，落这一批（创建细节统一走 MatchGameWriter）
+        matchGameWriter.clearPending(gameId);
         for (ArrangeEngine.ArrangeMatch m : result.matches()) {
-            MatchGame match = new MatchGame();
-            match.setGameId(gameId);
-            match.setFormat(m.format());
-            match.setTeamA(join(m.teamA()));
-            match.setTeamB(join(m.teamB()));
-            match.setScoreA(0);
-            match.setScoreB(0);
-            match.setWinner(0);
-            match.setSettleStatus(Constants.SETTLE_PENDING);
-            matchGameMapper.insert(match);
+            matchGameWriter.save(gameId, m.format(), m.teamA(), m.teamB(), 0, 0);
         }
 
         game.setStatus(Constants.GAME_STATUS_ARRANGED);
@@ -563,17 +550,6 @@ public class GameService {
                 .filter(s -> !s.isEmpty())
                 .map(Long::valueOf)
                 .toList();
-    }
-
-    private static String join(Iterable<Long> ids) {
-        StringBuilder sb = new StringBuilder();
-        for (Long id : ids) {
-            if (sb.length() > 0) {
-                sb.append(',');
-            }
-            sb.append(id);
-        }
-        return sb.toString();
     }
 
     private Game requireGame(Long gameId) {

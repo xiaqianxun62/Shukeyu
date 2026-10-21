@@ -53,6 +53,7 @@ public class RotationService {
     private final RegistrationMapper registrationMapper;
     private final UserMapper userMapper;
     private final MatchGameMapper matchGameMapper;
+    private final MatchGameWriter matchGameWriter;
     private final MatchScoreLogMapper matchScoreLogMapper;
     private final RatingHistoryMapper ratingHistoryMapper;
     private final EloProperties eloProperties;
@@ -401,9 +402,7 @@ public class RotationService {
         // 真实球局：把轮排结果持久化为 match_game，点击场地就能计分。
         // 已有比分的对阵不删（保留战绩），只清掉还没打的旧对阵，然后生成新的上场安排。
         if (gameId != null) {
-            matchGameMapper.delete(new LambdaQueryWrapper<MatchGame>()
-                    .eq(MatchGame::getGameId, gameId)
-                    .eq(MatchGame::getWinner, 0));
+            matchGameWriter.clearPending(gameId);
         }
 
         List<RotationResponse.RoundItem> rounds = new ArrayList<>();
@@ -412,19 +411,8 @@ public class RotationService {
             for (RotationEngine.CourtMatch m : r.matches()) {
                 Long matchId = null;
                 if (gameId != null) {
-                    MatchGame mg = new MatchGame();
-                    mg.setGameId(gameId);
-                    mg.setFormat(m.format());
-                    mg.setRoundNo(r.round());
-                    mg.setCourt(m.court());
-                    mg.setTeamA(join(m.teamA()));
-                    mg.setTeamB(join(m.teamB()));
-                    mg.setScoreA(0);
-                    mg.setScoreB(0);
-                    mg.setWinner(0);
-                    mg.setSettleStatus(Constants.SETTLE_PENDING);
-                    matchGameMapper.insert(mg);
-                    matchId = mg.getId();
+                    matchId = matchGameWriter.save(gameId, m.format(), m.teamA(), m.teamB(),
+                            r.round(), m.court());
                 }
                 matchItems.add(RotationResponse.MatchItem.builder()
                         .matchId(matchId)
@@ -568,17 +556,9 @@ public class RotationService {
         return team.size() <= 1 ? Constants.FORMAT_SINGLES : Constants.FORMAT_MEN_DOUBLES;
     }
 
+    /** 赛制文案统一走 MatchFormatUtil，避免和 EloSimulateService / TournamentService 各写一份 */
     private String formatName(Integer format) {
-        if (format == null) {
-            return "未知";
-        }
-        return switch (format) {
-            case Constants.FORMAT_SINGLES -> "单打";
-            case Constants.FORMAT_MEN_DOUBLES -> "男双";
-            case Constants.FORMAT_WOMEN_DOUBLES -> "女双";
-            case Constants.FORMAT_MIXED_DOUBLES -> "混双";
-            default -> "双打";
-        };
+        return MatchFormatUtil.formatName(format);
     }
 
     private String label(String input, long fallbackId) {
@@ -586,15 +566,6 @@ public class RotationService {
             return input.trim();
         }
         return "球员" + fallbackId;
-    }
-
-    private static String join(Iterable<Long> ids) {
-        StringBuilder sb = new StringBuilder();
-        for (Long id : ids) {
-            if (sb.length() > 0) sb.append(',');
-            sb.append(id);
-        }
-        return sb.toString();
     }
 
     private static List<Long> split(String ids) {
