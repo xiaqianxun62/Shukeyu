@@ -173,6 +173,24 @@ public class UserService {
         return buildAuthResponse(user, null);
     }
 
+    /**
+     * 管理员重置某账号密码：重置为默认密码 123456（换新盐重新哈希）。
+     * 微信用户没有账号，无法账号密码登录，直接拒绝。
+     */
+    public void adminResetPassword(Long targetId) {
+        User target = userMapper.selectById(targetId);
+        if (target == null) {
+            throw new BizException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (target.getAccount() == null || target.getAccount().isBlank()) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "该用户未设置账号，无法使用密码登录");
+        }
+        String salt = randomSalt();
+        target.setPasswordHash(hash(Constants.RESET_PASSWORD, salt) + ":" + salt);
+        userMapper.updateById(target);
+        log.info("管理员重置用户密码: userId={}", targetId);
+    }
+
     private String defaultName(String nickName, String openid) {
         if (nickName != null && !nickName.isBlank()) {
             return nickName.trim();

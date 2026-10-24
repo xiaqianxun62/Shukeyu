@@ -86,6 +86,9 @@ public final class Constants {
     public static final int ADMIN_NO = 0;
     public static final int ADMIN_YES = 1;
 
+    /** 管理员重置密码时写入的默认密码 */
+    public static final String RESET_PASSWORD = "123456";
+
     /** 报名展示方式：匿名（对外只显示「球友#xxxx」） */
     public static final int ANONYMOUS_YES = 1;
     /** 报名展示方式：实名（报名列表对登录用户显示真实姓名） */

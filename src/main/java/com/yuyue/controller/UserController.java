@@ -59,6 +59,17 @@ public class UserController {
         return ApiResponse.ok(target);
     }
 
+    /** 管理员重置某账号的密码为默认密码 123456 */
+    @PutMapping("/{id}/reset-password")
+    @Operation(summary = "管理员：重置账号密码为 123456")
+    @OperationLog("重置密码")
+    public ApiResponse<Void> resetPassword(@PathVariable Long id) {
+        Long operatorId = UserContext.require();
+        requireAdmin(operatorId);
+        userService.adminResetPassword(id);
+        return ApiResponse.ok();
+    }
+
     private void requireAdmin(Long userId) {
         User u = userMapper.selectById(userId);
         if (u == null || u.getIsAdmin() == null || u.getIsAdmin() != 1) {
