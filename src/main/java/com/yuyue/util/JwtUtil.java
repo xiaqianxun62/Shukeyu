@@ -38,18 +38,25 @@ public class JwtUtil {
     }
 
     /**
-     * 解析并校验 token，返回 userId；非法/过期抛 UNAUTHORIZED
+     * 解析并校验 token，返回完整 claims；非法/过期抛 UNAUTHORIZED。
+     * 调用方可读到 issuedAt，用于与「按用户踢下线标记」对比 token 新旧。
      */
-    public Long parse(String token) {
+    public Claims parseClaims(String token) {
         try {
-            Claims claims = Jwts.parser()
+            return Jwts.parser()
                     .verifyWith(key)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            return Long.valueOf(claims.getSubject());
         } catch (Exception e) {
             throw new BizException(ErrorCode.UNAUTHORIZED);
         }
+    }
+
+    /**
+     * 解析并校验 token，返回 userId；非法/过期抛 UNAUTHORIZED
+     */
+    public Long parse(String token) {
+        return Long.valueOf(parseClaims(token).getSubject());
     }
 }

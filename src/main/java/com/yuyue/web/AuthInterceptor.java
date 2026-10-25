@@ -87,7 +87,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
         Long userId;
         try {
-            userId = jwtUtil.parse(token);
+            userId = requireFreshToken(token);
         } catch (BizException e) {
             // token 过期 / 签名不对：JwtUtil 已统一抛 UNAUTHORIZED，这里只补一条可定位的日志
             log.debug("token 无效或已过期: {} {}", request.getMethod(), request.getRequestURI());
@@ -107,14 +107,32 @@ public class AuthInterceptor implements HandlerInterceptor {
      */
     private void trySoftAuth(String token) {
         try {
-            // 登出黑名单：软鉴权也不认
-            Boolean blacklisted = redisTemplate.opsForSet().isMember(Constants.JWT_BLACKLIST, token);
-            if (Boolean.TRUE.equals(blacklisted)) return;
-            Long userId = jwtUtil.parse(token);
+            // 登出黑名单与踢下线标记：软鉴权也不认
+            Long userId = requireFreshToken(token);
             if (userId != null) UserContext.set(userId);
         } catch (Exception ignored) {
             // 公开接口，token 无效就当作没登录，不报错
         }
+    }
+
+    /**
+     * 严格校验：解析 token 并拒绝两类旧 token ——
+     * 1) 登出黑名单里的 token（登出时写入）；
+     * 2) 早于「按用户踢下线标记」签发的 token（管理员重置密码时写入，被重置者旧会话立即失效）。
+     */
+    private Long requireFreshToken(String token) {
+        Boolean blacklisted = redisTemplate.opsForSet().isMember(Constants.JWT_BLACKLIST, token);
+        if (Boolean.TRUE.equals(blacklisted)) {
+            return null;
+        }
+        io.jsonwebtoken.Claims claims = jwtUtil.parseClaims(token);
+        Long userId = Long.valueOf(claims.getSubject());
+        String resetMs = redisTemplate.opsForValue().get(Constants.JWT_PWD_RESET_PREFIX + userId);
+        if (resetMs != null && claims.getIssuedAt() != null
+                && claims.getIssuedAt().getTime() < Long.parseLong(resetMs)) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 
     /**

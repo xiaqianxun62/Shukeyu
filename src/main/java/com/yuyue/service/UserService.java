@@ -188,7 +188,12 @@ public class UserService {
         String salt = randomSalt();
         target.setPasswordHash(hash(Constants.RESET_PASSWORD, salt) + ":" + salt);
         userMapper.updateById(target);
-        log.info("管理员重置用户密码: userId={}", targetId);
+        // 踢下线：好友标记早于此刻签发的 token 失效（TTL = token 最大存活时间，到期自动清）
+        redisTemplate.opsForValue().set(
+                Constants.JWT_PWD_RESET_PREFIX + targetId,
+                String.valueOf(System.currentTimeMillis()),
+                Duration.ofHours(jwtProperties.getExpireHours()));
+        log.info("管理员重置用户密码并踢其旧会话下线: userId={}", targetId);
     }
 
     private String defaultName(String nickName, String openid) {

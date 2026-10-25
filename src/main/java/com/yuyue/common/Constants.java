@@ -23,6 +23,11 @@ public final class Constants {
     /** JWT 黑名单（登出后 token 失效）：member=token */
     public static final String JWT_BLACKLIST = "yuyue:jwt:blacklist";
 
+    /**
+     * 按用户踢下线标记前缀：完整 key 为 前缀+userId，value=重置/生效时刻（epoch ms）。
+     * 旸于该时刻之前签发的 token 一律拒绝；TTL 设为 token 最大存活时间，到期自动清。 */
+    public static final String JWT_PWD_RESET_PREFIX = "yuyue:jwt:pwd_reset:";
+
     /* ---------- 枚举值 ---------- */
 
     /** 性别：未知（用户未填写）。ELO 性别修正按中性处理 */
