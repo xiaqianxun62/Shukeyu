@@ -54,6 +54,7 @@ public class RotationService {
     private final UserMapper userMapper;
     private final MatchGameMapper matchGameMapper;
     private final MatchGameWriter matchGameWriter;
+    private final PermissionService permissionService;
     private final MatchScoreLogMapper matchScoreLogMapper;
     private final RatingHistoryMapper ratingHistoryMapper;
     private final EloProperties eloProperties;
@@ -81,9 +82,9 @@ public class RotationService {
         if (game == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "球局不存在");
         }
-        // 轮排表会覆盖已有安排并置球局为已编排，只能由发起人或管理员操作
-        if (!isAdmin(operatorId) && !java.util.Objects.equals(game.getCreatorId(), operatorId)) {
-            throw new BizException(ErrorCode.FORBIDDEN, "只有发起人或管理员可以生成轮排表");
+        // 轮排表会覆盖已有安排并置球局为已编排，发起人或持 game:manage 权限者（干事以上）均可操作
+        if (!canManageGame(operatorId, game.getCreatorId())) {
+            throw new BizException(ErrorCode.FORBIDDEN, "只有发起人或干事以上角色可以生成轮排表");
         }
         List<Registration> regs = registrationMapper.selectList(
                 new LambdaQueryWrapper<Registration>().eq(Registration::getGameId, gameId));
@@ -594,10 +595,11 @@ public class RotationService {
         }
     }
 
-    /** 判断 operatorId 对应用户是否管理员（user.isAdmin == 1） */
-    private boolean isAdmin(Long operatorId) {
-        User u = userMapper.selectById(operatorId);
-        return u != null && u.getIsAdmin() != null && u.getIsAdmin() == 1;
+    /** 球局管理判定：发起人本人，或持有 game:manage 权限码（干事以上可代管任意球局） */
+    private boolean canManageGame(Long operatorId, Long creatorId) {
+        if (operatorId == null) return false;
+        return operatorId.equals(creatorId)
+                || permissionService.hasPermission(operatorId, PermissionService.P_GAME_MANAGE);
     }
 
     private int countGender(List<RotationEngine.RotationPlayer> players, int gender) {

@@ -4,9 +4,8 @@ import com.yuyue.common.ApiResponse;
 import com.yuyue.common.ErrorCode;
 import com.yuyue.common.OperationLog;
 import com.yuyue.config.UploadProperties;
-import com.yuyue.entity.User;
 import com.yuyue.exception.BizException;
-import com.yuyue.mapper.UserMapper;
+import com.yuyue.service.PermissionService;
 import com.yuyue.service.SettingsService;
 import com.yuyue.web.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,7 +45,7 @@ public class SettingsController {
     private static final Random RANDOM = new Random();
 
     private final SettingsService settingsService;
-    private final UserMapper userMapper;
+    private final PermissionService permissionService;
     private final UploadProperties uploadProperties;
 
     /** 首页诗句签名：公开接口，小程序首页未登录也能拉 */
@@ -62,10 +61,7 @@ public class SettingsController {
     @OperationLog("修改首页诗句文案")
     public ApiResponse<Map<String, String>> updateHomePoem(
             @RequestBody(required = false) Map<String, String> patch) {
-        User me = userMapper.selectById(UserContext.require());
-        if (me == null || me.getIsAdmin() == null || me.getIsAdmin() != 1) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可修改站点文案");
-        }
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_SETTINGS_MANAGE);
         return ApiResponse.ok(settingsService.updateHomePoem(patch));
     }
 
@@ -82,10 +78,7 @@ public class SettingsController {
     @OperationLog("修改首页弹窗公告")
     public ApiResponse<Map<String, String>> updateHomeNotice(
             @RequestBody(required = false) Map<String, String> patch) {
-        User me = userMapper.selectById(UserContext.require());
-        if (me == null || me.getIsAdmin() == null || me.getIsAdmin() != 1) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可修改站点文案");
-        }
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_SETTINGS_MANAGE);
         return ApiResponse.ok(settingsService.updateHomeNotice(patch));
     }
 
@@ -146,10 +139,8 @@ public class SettingsController {
         return ext;
     }
 
+    /** 持 settings:manage 权限（ADMIN）方可修改站点配置 */
     private void requireAdmin() {
-        User me = userMapper.selectById(UserContext.require());
-        if (me == null || me.getIsAdmin() == null || me.getIsAdmin() != 1) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可操作");
-        }
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_SETTINGS_MANAGE);
     }
 }

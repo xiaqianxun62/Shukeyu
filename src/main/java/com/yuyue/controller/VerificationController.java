@@ -4,9 +4,8 @@ import com.yuyue.common.ApiResponse;
 import com.yuyue.common.ErrorCode;
 import com.yuyue.dto.AnswerSubmitRequest;
 import com.yuyue.dto.QuestionCreateRequest;
-import com.yuyue.entity.User;
 import com.yuyue.entity.VerificationQuestion;
-import com.yuyue.mapper.UserMapper;
+import com.yuyue.service.PermissionService;
 import com.yuyue.service.VerificationService;
 import com.yuyue.web.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,13 +33,11 @@ import java.util.List;
 public class VerificationController {
 
     private final VerificationService verificationService;
-    private final UserMapper userMapper;
+    private final PermissionService permissionService;
 
+    /** 持 verify:manage 权限（社长 / 系统管理员）方可管理题库 */
     private void requireAdmin(Long userId) {
-        User u = userMapper.selectById(userId);
-        if (u == null || u.getIsAdmin() == null || u.getIsAdmin() != 1) {
-            throw new com.yuyue.exception.BizException(ErrorCode.FORBIDDEN, "仅管理员可操作");
-        }
+        permissionService.requirePermission(userId, PermissionService.P_VERIFY_MANAGE);
     }
 
     // ========== 管理员：问题库 CRUD ==========

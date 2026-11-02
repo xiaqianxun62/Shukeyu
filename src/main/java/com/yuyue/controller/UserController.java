@@ -1,12 +1,12 @@
 package com.yuyue.controller;
 
 import com.yuyue.common.ApiResponse;
-import com.yuyue.common.Constants;
 import com.yuyue.common.ErrorCode;
 import com.yuyue.common.OperationLog;
 import com.yuyue.entity.User;
 import com.yuyue.exception.BizException;
 import com.yuyue.mapper.UserMapper;
+import com.yuyue.service.PermissionService;
 import com.yuyue.service.UserService;
 import com.yuyue.web.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 用户管理（管理员功能：列出所有用户、设置/取消管理员身份）
+ * 用户管理（持 user:manage 权限者：社长 / 系统管理员）
  */
 @Tag(name = "用户管理")
 @RestController
@@ -27,53 +27,64 @@ public class UserController {
 
     private final UserService userService;
     private final UserMapper userMapper;
+    private final PermissionService permissionService;
 
-    /** 管理员列出所有用户（不返回密码哈希） */
+    /** 列出所有用户（不返回密码哈希） */
     @GetMapping
-    @Operation(summary = "管理员：列出所有用户")
+    @Operation(summary = "列出所有用户", description = "持 user:manage 权限（社长/系统管理员）")
     public ApiResponse<List<User>> list() {
-        Long operatorId = UserContext.require();
-        requireAdmin(operatorId);
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_USER_MANAGE);
         List<User> users = userMapper.selectList(null);
         users.forEach(u -> u.setPasswordHash(null));
         return ApiResponse.ok(users);
     }
 
-    /** 管理员设置或取消某人的 isAdmin */
-    @PutMapping("/{id}/admin")
-    @Operation(summary = "管理员：设置/取消管理员身份")
-    @OperationLog("设置管理员")
-    public ApiResponse<User> setAdmin(@PathVariable Long id, @RequestParam boolean admin) {
-        Long operatorId = UserContext.require();
-        requireAdmin(operatorId);
-        if (operatorId.equals(id)) {
-            throw new BizException(ErrorCode.PARAM_ERROR, "不能设置自己");
-        }
+    /** 可分配的角色清单（官网分配界面数据源） */
+    @GetMapping("roles")
+    @Operation(summary = "可分配角色清单", description = "返回四级角色码与名称，按权限从低到高")
+    public ApiResponse<List<PermissionService.RoleView>> listRoles() {
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_USER_MANAGE);
+        return ApiResponse.ok(permissionService.listAssignableRoles());
+    }
+
+    /** 查看/重置某人当前角色（供编辑界面回显） */
+    @GetMapping("{id}/roles")
+    @Operation(summary = "查某人的角色码", description = "持 user:manage 权限")
+    public ApiResponse<List<String>> userRoles(@PathVariable Long id) {
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_USER_MANAGE);
+        return ApiResponse.ok(permissionService.getRoles(id));
+    }
+
+    /** 分配角色（整体覆盖式）：干事代管任意球局、社长管理用户，角色码见 GET /users/roles */
+    @PutMapping("{id}/roles")
+    @Operation(summary = "分配角色（整体覆盖）",
+            description = "body: {\"roles\":[\"OFFICER\",\"ADMIN\"]}；不能改自己，ADMIN 仅系统管理员可授，系统至少保留一名 ADMIN")
+    @OperationLog("分配角色")
+    public ApiResponse<List<String>> assignRoles(@PathVariable Long id,
+                                                 @RequestBody AssignRolesRequest req) {
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_USER_MANAGE);
         User target = userMapper.selectById(id);
         if (target == null) {
             throw new BizException(ErrorCode.USER_NOT_FOUND);
         }
-        target.setIsAdmin(admin ? Constants.ADMIN_YES : Constants.ADMIN_NO);
-        userMapper.updateById(target);
-        target.setPasswordHash(null);
-        return ApiResponse.ok(target);
+        List<String> roles = permissionService.assignRoles(UserContext.require(), id, req.getRoles());
+        return ApiResponse.ok(roles);
     }
 
     /** 管理员重置某账号的密码为默认密码 123456 */
     @PutMapping("/{id}/reset-password")
-    @Operation(summary = "管理员：重置账号密码为 123456")
+    @Operation(summary = "重置账号密码为 123456", description = "持 user:manage 权限；未设置账号的微信用户拒绝")
     @OperationLog("重置密码")
     public ApiResponse<Void> resetPassword(@PathVariable Long id) {
-        Long operatorId = UserContext.require();
-        requireAdmin(operatorId);
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_USER_MANAGE);
         userService.adminResetPassword(id);
         return ApiResponse.ok();
     }
 
-    private void requireAdmin(Long userId) {
-        User u = userMapper.selectById(userId);
-        if (u == null || u.getIsAdmin() == null || u.getIsAdmin() != 1) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可操作");
-        }
+    /** 角色分配请求体 */
+    @lombok.Data
+    public static class AssignRolesRequest {
+        /** 角色码列表，整体覆盖式赋权；空数组 = 降回普通社员 */
+        private List<String> roles;
     }
 }

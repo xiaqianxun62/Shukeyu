@@ -45,13 +45,14 @@ class UserServiceAdminResetPasswordTest {
     @Mock private ValueOperations<String, String> valueOps;
     @Mock private WeChatService weChatService;
     @Mock private UploadProperties uploadProperties;
+    @Mock private PermissionService permissionService;
 
     private UserService userService;
 
     @BeforeEach
     void setUp() {
         userService = new UserService(userMapper, jwtUtil, eloProperties, jwtProperties,
-                redisTemplate, weChatService, uploadProperties);
+                redisTemplate, weChatService, uploadProperties, permissionService);
     }
 
     private User accountUser(long id) {

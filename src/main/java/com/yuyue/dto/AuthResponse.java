@@ -3,6 +3,8 @@ package com.yuyue.dto;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @Builder
 public class AuthResponse {
@@ -51,8 +53,8 @@ public class AuthResponse {
 
     private Integer mixedLoss;
 
-    /** 是否管理员（后端 user.isAdmin） */
-    private Boolean isAdmin;
+    /** 当前用户的权限码列表（RBAC，四级角色映射；前端据此做管理入口显隐） */
+    private List<String> permissions;
 
     /** 身份校验是否已通过 */
     private Boolean isVerified;

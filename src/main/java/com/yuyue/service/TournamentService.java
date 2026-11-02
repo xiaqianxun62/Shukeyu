@@ -78,6 +78,7 @@ public class TournamentService {
     private final UserMapper userMapper;
     private final CourtMapper courtMapper;
     private final TournamentEngine engine;
+    private final PermissionService permissionService;
 
     /* ==================== 文案映射 ==================== */
 
@@ -169,7 +170,7 @@ public class TournamentService {
         Tournament t = requireTournament(id);
         List<TournamentEntry> entries = loadEntries(id);
         Map<Long, User> users = loadUsers(entries);
-        boolean admin = isAdmin(userId);
+        boolean admin = canManageTournament(userId);
         boolean drawn = isDrawn(t);
         List<Integer> formats = parseFormats(t.getFormatList());
         int maxEntries = nz(t.getMaxEntries());
@@ -350,7 +351,7 @@ public class TournamentService {
                 .title(t.getTitle())
                 .status(t.getStatus())
                 .statusText(statusText(t.getStatus()))
-                .admin(isAdmin(userId))
+                .admin(canManageTournament(userId))
                 .formats(out)
                 .build();
     }
@@ -978,23 +979,21 @@ public class TournamentService {
         return t;
     }
 
-    private boolean isAdmin(Long userId) {
-        if (userId == null) {
-            return false;
-        }
-        User u = userMapper.selectById(userId);
-        return u != null && nz(u.getIsAdmin()) == Constants.ADMIN_YES;
+    /** 赛事管理判定：持 tournament:manage 权限码（干事以上） */
+    private boolean canManageTournament(Long userId) {
+        return userId != null
+                && permissionService.hasPermission(userId, PermissionService.P_TOURNAMENT_MANAGE);
     }
 
     private void requireAdmin(Long userId) {
-        if (!isAdmin(userId)) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可操作");
+        if (!canManageTournament(userId)) {
+            throw new BizException(ErrorCode.FORBIDDEN, "仅干事以上角色可操作");
         }
     }
 
     /** 管理员或赛事创建人（创建人也是管理员才能建赛事，这里主要覆盖「非管理员但自己建的」的历史数据） */
     private void requireOwnerOrAdmin(Tournament t, Long userId) {
-        if (isAdmin(userId) || Objects.equals(t.getCreatorId(), userId)) {
+        if (canManageTournament(userId) || Objects.equals(t.getCreatorId(), userId)) {
             return;
         }
         throw new BizException(ErrorCode.FORBIDDEN, "仅赛事创建人或管理员可操作");
@@ -1010,7 +1009,7 @@ public class TournamentService {
         if (operatorId == null) {
             throw new BizException(ErrorCode.UNAUTHORIZED);
         }
-        if (isAdmin(operatorId) || Objects.equals(t.getCreatorId(), operatorId)) {
+        if (canManageTournament(operatorId) || Objects.equals(t.getCreatorId(), operatorId)) {
             return;
         }
         for (Long teamId : List.of(m.getTeamA(), m.getTeamB())) {

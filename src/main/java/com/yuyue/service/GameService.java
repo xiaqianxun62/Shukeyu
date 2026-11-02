@@ -56,6 +56,7 @@ public class GameService {
     private final StringRedisTemplate redisTemplate;
     private final ArrangeEngine arrangeEngine;
     private final RegistrationSnapshotService snapshotService;
+    private final PermissionService permissionService;
 
     /**
      * 发布球局。两种模式：
@@ -86,7 +87,7 @@ public class GameService {
     @Transactional
     public GameResponse update(Long operatorId, Long gameId, GameCreateRequest req) {
         Game game = requireGame(gameId);
-        if (!isAdmin(operatorId) && !Objects.equals(game.getCreatorId(), operatorId)) {
+        if (!canManageGame(operatorId, game.getCreatorId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只有发起人可以编辑球局");
         }
         if (game.getStatus() != Constants.GAME_STATUS_OPEN) {
@@ -101,7 +102,7 @@ public class GameService {
             throw new BizException(ErrorCode.GAME_TITLE_DUPLICATE);
         }
         log.info("球局编辑: id={}, title={}, operator={}, admin={}",
-                gameId, game.getTitle(), operatorId, isAdmin(operatorId));
+                gameId, game.getTitle(), operatorId, canManageGame(operatorId, game.getCreatorId()));
         return buildGameResponse(game);
     }
 
@@ -113,7 +114,7 @@ public class GameService {
     @Transactional
     public void delete(Long operatorId, Long gameId) {
         Game game = requireGame(gameId);
-        if (!isAdmin(operatorId) && !Objects.equals(game.getCreatorId(), operatorId)) {
+        if (!canManageGame(operatorId, game.getCreatorId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只有发起人可以删除球局");
         }
         if (game.getStatus() != Constants.GAME_STATUS_OPEN) {
@@ -127,14 +128,16 @@ public class GameService {
         // 软删球局本身
         gameMapper.deleteById(gameId);
         log.info("球局删除: id={}, title={}, operator={}, admin={}",
-                gameId, game.getTitle(), operatorId, isAdmin(operatorId));
+                gameId, game.getTitle(), operatorId, canManageGame(operatorId, game.getCreatorId()));
     }
 
-    /** 判断 operatorId 对应用户是否管理员（user.isAdmin == 1） */
-    private boolean isAdmin(Long operatorId) {
+    /**
+     * 球局管理判定：发起人本人，或持有 game:manage 权限码（干事以上可代管任意球局）。
+     */
+    private boolean canManageGame(Long operatorId, Long creatorId) {
         if (operatorId == null) return false;
-        com.yuyue.entity.User u = userMapper.selectById(operatorId);
-        return u != null && u.getIsAdmin() != null && u.getIsAdmin() == 1;
+        return operatorId.equals(creatorId)
+                || permissionService.hasPermission(operatorId, PermissionService.P_GAME_MANAGE);
     }
 
     /** 把 GameCreateRequest 的字段落到 game 上，并做模式分支校验（预报名必填日期时间） */
@@ -205,7 +208,7 @@ public class GameService {
     /** 发起人 / 管理员：隐藏球局（不再首页显示，但详情页仍可访问） */
     public void hide(Long gameId, Long operatorId) {
         Game game = requireGame(gameId);
-        if (!isAdmin(operatorId) && !Objects.equals(game.getCreatorId(), operatorId)) {
+        if (!canManageGame(operatorId, game.getCreatorId())) {
             throw new BizException(ErrorCode.PARAM_ERROR, "无权限隐藏该球局");
         }
         game.setHidden(1);
@@ -215,7 +218,7 @@ public class GameService {
     /** 发起人 / 管理员：恢复显示 */
     public void unhide(Long gameId, Long operatorId) {
         Game game = requireGame(gameId);
-        if (!isAdmin(operatorId) && !Objects.equals(game.getCreatorId(), operatorId)) {
+        if (!canManageGame(operatorId, game.getCreatorId())) {
             throw new BizException(ErrorCode.PARAM_ERROR, "无权限恢复该球局");
         }
         game.setHidden(0);
@@ -340,7 +343,7 @@ public class GameService {
             throw new BizException(ErrorCode.GAME_STATUS_ERROR);
         }
         // 编排方案由发起人拍板（管理员例外）
-        if (!isAdmin(operatorId) && !Objects.equals(game.getCreatorId(), operatorId)) {
+        if (!canManageGame(operatorId, game.getCreatorId())) {
             throw new BizException(ErrorCode.FORBIDDEN, "只有发起人可以选择编排方案");
         }
         List<Registration> regs = registrationMapper.selectList(

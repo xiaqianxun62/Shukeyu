@@ -22,7 +22,10 @@ spring:
   jackson:
     time-zone: Asia/Shanghai
   datasource:
-    url: jdbc:mariadb://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/yuyue?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    # allowPublicKeyRetrieval=true：服务端用 caching_sha2_password / sha256_password 时，
+    # 非 TLS 连接需要向服务端索取 RSA 公钥来加密密码，否则报
+    # "RSA public key is not available client side (option serverRsaPublicKeyFile not set)"。
+    url: jdbc:mariadb://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/yuyue?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER:265147}
     password: ${MYSQL_PASSWORD:265147}
     driver-class-name: org.mariadb.jdbc.Driver

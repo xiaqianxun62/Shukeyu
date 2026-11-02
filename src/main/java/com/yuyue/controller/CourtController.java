@@ -2,15 +2,13 @@ package com.yuyue.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.yuyue.common.ApiResponse;
-import com.yuyue.common.Constants;
 import com.yuyue.common.ErrorCode;
 import com.yuyue.common.OperationLog;
 import com.yuyue.dto.CourtRequest;
 import com.yuyue.entity.Court;
-import com.yuyue.entity.User;
 import com.yuyue.exception.BizException;
 import com.yuyue.mapper.CourtMapper;
-import com.yuyue.mapper.UserMapper;
+import com.yuyue.service.PermissionService;
 import com.yuyue.web.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,7 +30,7 @@ import java.util.List;
 public class CourtController {
 
     private final CourtMapper courtMapper;
-    private final UserMapper userMapper;
+    private final PermissionService permissionService;
 
     /** 公开：列出所有启用的球场（按 sort 排序，下拉框数据源） */
     @GetMapping
@@ -135,11 +133,8 @@ public class CourtController {
         }
     }
 
+    /** 持 court:manage 权限（ADMIN）方可维护场地字典 */
     private void requireAdmin() {
-        Long operatorId = UserContext.require();
-        User u = userMapper.selectById(operatorId);
-        if (u == null || u.getIsAdmin() == null || u.getIsAdmin() != Constants.ADMIN_YES) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可操作");
-        }
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_COURT_MANAGE);
     }
 }

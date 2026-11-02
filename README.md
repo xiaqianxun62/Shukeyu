@@ -243,5 +243,5 @@ mvn test   # EloCalculatorTest + ArrangeEngineTest + TournamentEngineTest + Rota
 
 ## 相关项目
 
-- PC 官网 / 管理后台：[../yuyue-vue](../yuyue-vue)（Vue 3 + Vite）
-- 微信小程序 / H5：[../yuyue-wxapp](../yuyue-wxapp)（uni-app）
+- PC 官网 / 管理后台：[shukeyu-vue](../shukeyu-vue)（Vue 3 + Vite）
+- 微信小程序 / H5：[shukeyu-wxapp](../shukeyu-wxapp)（uni-app）

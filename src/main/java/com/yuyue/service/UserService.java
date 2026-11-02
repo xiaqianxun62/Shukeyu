@@ -52,6 +52,7 @@ public class UserService {
     private final StringRedisTemplate redisTemplate;
     private final WeChatService weChatService;
     private final UploadProperties uploadProperties;
+    private final PermissionService permissionService;
 
     public AuthResponse register(RegisterRequest req) {
         Long existing = userMapper.selectCount(
@@ -350,7 +351,7 @@ public class UserService {
                 .ratingMixed(user.getRatingMixed())
                 .mixedWin(user.getMixedWin())
                 .mixedLoss(user.getMixedLoss())
-                .isAdmin(user.getIsAdmin() != null && user.getIsAdmin() == 1)
+                .permissions(permissionService.getPermissions(user.getId()))
                 .isVerified(user.getIsVerified() != null && user.getIsVerified() == 1)
                 .build();
     }

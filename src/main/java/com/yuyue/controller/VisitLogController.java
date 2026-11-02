@@ -1,11 +1,8 @@
 package com.yuyue.controller;
 
 import com.yuyue.common.ApiResponse;
-import com.yuyue.common.Constants;
 import com.yuyue.common.ErrorCode;
-import com.yuyue.entity.User;
-import com.yuyue.exception.BizException;
-import com.yuyue.mapper.UserMapper;
+import com.yuyue.service.PermissionService;
 import com.yuyue.service.VisitLogService;
 import com.yuyue.web.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,7 +25,7 @@ import java.util.List;
 public class VisitLogController {
 
     private final VisitLogService visitLogService;
-    private final UserMapper userMapper;
+    private final PermissionService permissionService;
 
     @Operation(summary = "访问日志列表", description = "仅管理员；按时间倒序，可按 IP 精确过滤，limit 默认 100 上限 500")
     @GetMapping
@@ -39,11 +36,8 @@ public class VisitLogController {
         return ApiResponse.ok(visitLogService.list(ip, limit == null ? 100 : limit));
     }
 
+    /** 持 log:view 权限（ADMIN）方可查看访问日志 */
     private void requireAdmin() {
-        Long operatorId = UserContext.require();
-        User u = userMapper.selectById(operatorId);
-        if (u == null || u.getIsAdmin() == null || u.getIsAdmin() != Constants.ADMIN_YES) {
-            throw new BizException(ErrorCode.FORBIDDEN, "仅管理员可查看");
-        }
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_LOG_VIEW);
     }
 }

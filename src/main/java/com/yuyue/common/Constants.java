@@ -28,6 +28,11 @@ public final class Constants {
      * 旸于该时刻之前签发的 token 一律拒绝；TTL 设为 token 最大存活时间，到期自动清。 */
     public static final String JWT_PWD_RESET_PREFIX = "yuyue:jwt:pwd_reset:";
 
+    /**
+     * RBAC 权限缓存前缀：完整 key 为 前缀+userId，value=权限码 CSV（空串=无权限）。
+     * 角色变更时按用户删除，TTL 24h 防孤儿。 */
+    public static final String RBAC_PERM_CACHE = "yuyue:rbac:perm:";
+
     /* ---------- 枚举值 ---------- */
 
     /** 性别：未知（用户未填写）。ELO 性别修正按中性处理 */
@@ -86,10 +91,6 @@ public final class Constants {
      * 所以男女比例越均衡，混双场就越多，两类场地都开得出来。
      */
     public static final int GENDER_RULE_ALL_THREE = 5;
-
-    /** 用户管理员标记 */
-    public static final int ADMIN_NO = 0;
-    public static final int ADMIN_YES = 1;
 
     /** 管理员重置密码时写入的默认密码 */
     public static final String RESET_PASSWORD = "123456";

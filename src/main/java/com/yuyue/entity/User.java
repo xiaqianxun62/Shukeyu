@@ -45,9 +45,6 @@ public class User {
     /** 个人头像 URL */
     private String avatar;
 
-    /** 0 普通用户 1 管理员（管理员可改站点文案、管理任何球局） */
-    private Integer isAdmin;
-
     /** 身份校验通过标记 0未通过 1已通过 */
     private Integer isVerified;
 
