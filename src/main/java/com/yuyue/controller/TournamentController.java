@@ -5,11 +5,15 @@ import com.yuyue.common.OperationLog;
 import com.yuyue.dto.TournamentBracketResponse;
 import com.yuyue.dto.TournamentCreateRequest;
 import com.yuyue.dto.TournamentDetailResponse;
+import com.yuyue.dto.TournamentEntryItem;
 import com.yuyue.dto.TournamentEntryRequest;
 import com.yuyue.dto.TournamentListItem;
+import com.yuyue.dto.TournamentManageItem;
 import com.yuyue.dto.TournamentMatchesResponse;
 import com.yuyue.dto.TournamentMatchItem;
 import com.yuyue.dto.TournamentScoreRequest;
+import com.yuyue.dto.TournamentSimulateRequest;
+import com.yuyue.dto.TournamentUpdateRequest;
 import com.yuyue.service.TournamentService;
 import com.yuyue.web.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -83,6 +87,41 @@ public class TournamentController {
     }
 
     /* ==================== 管理 ==================== */
+
+    @GetMapping("/manage")
+    @Operation(summary = "管理端赛事列表", description = "含已取消赛事；可按状态与名称筛选；"
+            + "返回各组别报名明细数与「淘汰赛规模是否合法」，抽签前即可判断配置是否凑得出完整签表")
+    public ApiResponse<List<TournamentManageItem>> manage(
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.ok(tournamentService.manageList(status, keyword, UserContext.require()));
+    }
+
+    @GetMapping("/{id}/entries")
+    @Operation(summary = "管理端参赛名单", description = "逐个参赛单位的明细（队名 / 组别 / 战绩 / 名次），"
+            + "移出参赛者时用返回的 entryId")
+    public ApiResponse<List<TournamentEntryItem>> entries(@PathVariable Long id) {
+        return ApiResponse.ok(tournamentService.entries(id, UserContext.require()));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "修改赛事（管理员）",
+            description = "报名中可全改；已抽签后组别与赛制配置锁定，只能改标题 / 地点 / 日期 / 球场 / 说明；开打后不可改")
+    @OperationLog("修改赛事")
+    public ApiResponse<Map<String, Object>> update(@PathVariable Long id,
+                                                   @Valid @RequestBody TournamentUpdateRequest req) {
+        Long operatorId = UserContext.require();
+        return ApiResponse.ok(tournamentService.update(id, req, operatorId));
+    }
+
+    @PostMapping("/simulate")
+    @Operation(summary = "模拟赛程", description = "不落库的赛程预演：分组 / 各轮对阵 / 最终名次全部在内存里算完即丢；"
+            + "可传 tournamentId 沿用该赛事的组别与配置，也可纯参数预演（如「假如 16 队、每组 4 人、每组 2 名晋级」）")
+    public ApiResponse<TournamentBracketResponse> simulate(
+            @Valid @RequestBody(required = false) TournamentSimulateRequest req) {
+        return ApiResponse.ok(tournamentService.simulate(
+                req == null ? new TournamentSimulateRequest() : req, UserContext.require()));
+    }
 
     @PostMapping
     @Operation(summary = "创建赛事（管理员）",

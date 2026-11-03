@@ -55,4 +55,22 @@ public class TournamentCreateRequest {
     @Min(value = 4, message = "参赛上限至少 4 队")
     @Max(value = 512, message = "参赛上限最多 512 队")
     private Integer maxEntries = 64;
+
+    /**
+     * 小组赛轮数：0 = 自动（按每组队数打满单循环）；&gt; 0 = 指定轮数。
+     * <p>小于满轮数即部分循环（每队交手次数变少，排名依据变弱）；
+     * 大于满轮数即多循环（双循环及以上，相邻两遍主客互换）。
+     */
+    @Min(value = 0, message = "小组赛轮数不能为负")
+    @Max(value = 45, message = "小组赛轮数最多 45 轮")
+    private Integer groupRounds = 0;
+
+    /**
+     * 淘汰赛轮数（不含季军赛 / 决赛）：0 = 自动（按晋级人数推导）。
+     * <p>&gt; 0 时规模 = 2^(轮数+1)；晋级人数超出该规模时自动扩容到能容纳的规模，
+     * 容纳不下时首轮出现轮空。
+     */
+    @Min(value = 0, message = "淘汰赛轮数不能为负")
+    @Max(value = 7, message = "淘汰赛轮数最多 7 轮（256 强）")
+    private Integer knockoutRounds = 0;
 }

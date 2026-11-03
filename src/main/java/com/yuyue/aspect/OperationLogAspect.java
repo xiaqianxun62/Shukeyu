@@ -1,6 +1,9 @@
 package com.yuyue.aspect;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.yuyue.common.OperationLog;
 import com.yuyue.web.UserContext;
 import jakarta.servlet.ServletRequest;
@@ -27,7 +30,15 @@ import java.util.regex.Pattern;
 @Component
 public class OperationLogAspect {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    /**
+     * 入参摘要用的序列化器。
+     * <p>注册 JavaTimeModule 才能处理 LocalDate / LocalDateTime——否则带日期的入参
+     * （如赛事创建 / 球局创建）会序列化失败，摘要退化成「入参序列化失败」。
+     */
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .addModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .build();
 
     /** 入参摘要最大长度，避免大对象刷屏 */
     private static final int MAX_ARGS_LENGTH = 500;

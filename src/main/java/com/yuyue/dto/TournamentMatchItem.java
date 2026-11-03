@@ -57,6 +57,12 @@ public class TournamentMatchItem {
     /** 本场是否已有结果 */
     private boolean finished;
 
+    /**
+     * 本场由上一轮的哪几场产生（树形对阵图用）。
+     * <p>首轮为空；淘汰赛后续轮为上一轮的两场；季军赛 / 决赛为四强轮的两场。
+     */
+    private List<Long> childMatchIds;
+
     /** 当前登录用户是否在这支队伍里（决定赛程录入页是否给「点胜方」的高亮提示） */
     private boolean involved;
 

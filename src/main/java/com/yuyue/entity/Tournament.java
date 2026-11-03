@@ -51,6 +51,12 @@ public class Tournament {
     /** 单个组别的参赛队数上限 */
     private Integer maxEntries;
 
+    /** 小组赛轮数：0=自动（打满单循环）；>0=指定轮数（超过满轮即多循环） */
+    private Integer groupRounds;
+
+    /** 淘汰赛轮数（不含季军赛/决赛）：0=自动（按晋级人数推导）；>0=指定轮数 */
+    private Integer knockoutRounds;
+
     /** 0报名中 1已抽签 2进行中 3已结束 4已取消 */
     private Integer status;
 
