@@ -2,6 +2,7 @@ package com.yuyue.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
@@ -49,4 +50,7 @@ public class RatingHistory {
     private BigDecimal genderAdjust;
 
     private LocalDateTime createTime;
+
+    @TableLogic
+    private Integer deleted;
 }

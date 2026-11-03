@@ -23,10 +23,16 @@ public class SettingsService {
     /** 首页弹窗公告：enabled=1 时两端首页展示；version 在内容更新时自增，前端据此重新弹 */
     private static final String REDIS_KEY_HOME_NOTICE = "yuyue:settings:home_notice";
 
+    /** 全站页脚文案（小程序 FooterSection & PC 官网底部共用） */
+    private static final String REDIS_KEY_FOOTER = "yuyue:settings:footer";
+
+    /** 默认页脚文案 */
+    private static final Map<String, String> DEFAULT_FOOTER = Map.of("text", "by 2026@千巽");
+
     /**
      * 默认首页弹窗（默认关闭，首次读取返回）。
      * frequency：always=每次进入都弹 / daily=每天一次(默认) / once=同一内容只弹一次；
-     * width/height 单位 px，height=0 表示高度自适应；颜色为 hex 色值。
+     * width/height 单位 px，height=0 表示高度自适应；颜色为 hex 色值；字号单位 px。
      */
     private static final Map<String, String> DEFAULT_HOME_NOTICE = Map.ofEntries(
             Map.entry("enabled", "0"),
@@ -41,6 +47,9 @@ public class SettingsService {
             Map.entry("btnTextColor", "#ffffff"),
             Map.entry("width", "420"),
             Map.entry("height", "0"),
+            Map.entry("titleSize", "20"),
+            Map.entry("contentSize", "15"),
+            Map.entry("btnSize", "15"),
             Map.entry("mediaType", ""),   // ""=无媒体 / image / video
             Map.entry("mediaUrl", "")     // 媒体地址（/uploads/xxx）
     );
@@ -153,6 +162,37 @@ public class SettingsService {
         redis.opsForHash().putAll(REDIS_KEY_HOME_NOTICE, base);
         redis.expire(REDIS_KEY_HOME_NOTICE, java.time.Duration.ofDays(90));
         log.info("站点文案 home-notice 更新: {}", base);
+        return base;
+    }
+
+    /** GET /settings/footer（公开）：返回当前页脚文案，空则返回默认值 */
+    public Map<String, String> getFooter() {
+        Map<Object, Object> stored = redis.opsForHash().entries(REDIS_KEY_FOOTER);
+        if (stored == null || stored.isEmpty()) {
+            return new LinkedHashMap<>(DEFAULT_FOOTER);
+        }
+        Map<String, String> out = new LinkedHashMap<>();
+        DEFAULT_FOOTER.keySet().forEach(k -> {
+            Object v = stored.get(k);
+            out.put(k, v == null ? DEFAULT_FOOTER.get(k) : v.toString());
+        });
+        return out;
+    }
+
+    /** PUT /settings/footer（仅管理员）：更新页脚文案，空值跳过不修改 */
+    public Map<String, String> updateFooter(Map<String, String> patch) {
+        Map<String, String> base = new HashMap<>(getFooter());
+        if (patch != null) {
+            for (String key : DEFAULT_FOOTER.keySet()) {
+                String v = patch.get(key);
+                if (v != null && !v.isBlank()) {
+                    base.put(key, v.trim());
+                }
+            }
+        }
+        redis.opsForHash().putAll(REDIS_KEY_FOOTER, base);
+        redis.expire(REDIS_KEY_FOOTER, java.time.Duration.ofDays(90));
+        log.info("站点文案 footer 更新: {}", base);
         return base;
     }
 }

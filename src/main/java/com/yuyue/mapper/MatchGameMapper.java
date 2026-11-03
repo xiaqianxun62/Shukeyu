@@ -18,7 +18,7 @@ public interface MatchGameMapper extends BaseMapper<MatchGame> {
      * 返回 MM-dd 与当日场次，service 侧补齐空天。
      */
     @Select("SELECT DATE_FORMAT(create_time, '%m-%d') AS `date`, COUNT(*) AS `count` "
-            + "FROM match_game WHERE create_time >= #{start} "
+            + "FROM match_game WHERE create_time >= #{start} AND deleted = 0 "
             + "GROUP BY DATE(create_time) ORDER BY DATE(create_time)")
     List<DayCount> countByDaySince(@Param("start") LocalDateTime start);
 }
