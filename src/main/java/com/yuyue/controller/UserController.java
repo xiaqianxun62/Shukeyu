@@ -47,6 +47,15 @@ public class UserController {
         return ApiResponse.ok(permissionService.listAssignableRoles());
     }
 
+    /** 角色 → 权限码矩阵：分配角色前先看清每个角色到底包含哪些权限 */
+    @GetMapping("roles/permissions")
+    @Operation(summary = "角色权限矩阵",
+            description = "返回四级角色及各自包含的权限码（code + 中文名），供管理端展示")
+    public ApiResponse<List<PermissionService.RolePermissionView>> rolePermissions() {
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_USER_MANAGE);
+        return ApiResponse.ok(permissionService.listRolePermissionMatrix());
+    }
+
     /** 查看/重置某人当前角色（供编辑界面回显） */
     @GetMapping("{id}/roles")
     @Operation(summary = "查某人的角色码", description = "持 user:manage 权限")

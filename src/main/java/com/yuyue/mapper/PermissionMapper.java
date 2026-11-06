@@ -34,6 +34,17 @@ public interface PermissionMapper extends BaseMapper<Permission> {
             """)
     List<String> selectRoleCodesByUserId(@Param("userId") Long userId);
 
+    /** 某角色拥有的全部权限码（管理端「角色 → 权限」矩阵数据源） */
+    @Select("""
+            SELECT p.code, p.name
+            FROM permission p
+            JOIN role_permission rp ON rp.permission_id = p.id
+            JOIN role r ON r.id = rp.role_id
+            WHERE r.code = #{roleCode}
+            ORDER BY p.id
+            """)
+    List<Permission> selectPermissionsByRoleCode(@Param("roleCode") String roleCode);
+
     /** 当前持有 ADMIN 角色的用户数（末位管理员保护用） */
     @Select("""
             SELECT COUNT(*)

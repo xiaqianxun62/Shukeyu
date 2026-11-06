@@ -112,13 +112,19 @@ public class PermissionService {
      * 分配角色（整体覆盖式）：把 target 的角色替换为 roleCodes。
      * 规则：
      *  1) 操作者不能改自己的角色（防止自我提权 / 末位管理员自锁）；
-     *  2) ADMIN 角色只有 ADMIN 才能授出；
-     *  3) 系统必须至少保留一名 ADMIN（末位管理员保护）。
+     *  2) 别人是 ADMIN 时，只有 ADMIN 能改他——否则持 user:manage 的社长可以把管理员
+     *     降成社员（只要还剩另一名管理员就能绕过末位保护），等于以下犯上；
+     *  3) ADMIN 角色只有 ADMIN 才能授出；
+     *  4) 系统必须至少保留一名 ADMIN（末位管理员保护）。
      */
     @Transactional
     public List<String> assignRoles(Long operatorId, Long targetUserId, List<String> roleCodes) {
         if (operatorId.equals(targetUserId)) {
             throw new BizException(ErrorCode.PARAM_ERROR, "不能修改自己的角色（防止末位管理员自锁）");
+        }
+        boolean operatorIsAdmin = hasRole(operatorId, "ADMIN");
+        if (hasRole(targetUserId, "ADMIN") && !operatorIsAdmin) {
+            throw new BizException(ErrorCode.FORBIDDEN, "只有系统管理员可以变更系统管理员的角色");
         }
         List<String> distinct = new ArrayList<>(new HashSet<>(roleCodes == null ? List.of() : roleCodes));
         for (String code : distinct) {
@@ -127,7 +133,7 @@ public class PermissionService {
             }
         }
         boolean grantsAdmin = distinct.contains("ADMIN");
-        if (grantsAdmin && !(hasPermission(operatorId, P_USER_MANAGE) && hasRole(operatorId, "ADMIN"))) {
+        if (grantsAdmin && !(hasPermission(operatorId, P_USER_MANAGE) && operatorIsAdmin)) {
             throw new BizException(ErrorCode.FORBIDDEN, "仅系统管理员可分配 ADMIN 角色");
         }
         // 目标此前是 ADMIN 且新角色集中没有 ADMIN → 视为撤销，触发末位保护
@@ -166,6 +172,27 @@ public class PermissionService {
         return roles.stream()
                 .sorted(java.util.Comparator.comparingInt(r -> ASSIGNABLE_ROLES.indexOf(r.getCode())))
                 .map(r -> new RoleView(r.getCode(), r.getName()))
+                .toList();
+    }
+
+    /** 权限码视图：code 供接口判定，name 供管理端展示 */
+    public record PermissionView(String code, String name) {}
+
+    /** 角色 → 权限码视图（管理端分配角色时显示「勾上这个角色到底给了什么」） */
+    public record RolePermissionView(String code, String name, List<PermissionView> permissions) {}
+
+    /**
+     * 角色权限矩阵：每个可分配角色包含哪些权限码。
+     * <p>
+     * 只读、数据量固定（4 个角色 × 不超过 8 个权限码），管理端每次打开分配弹窗拉一次即可，
+     * 不做缓存——改了 role_permission 之后刷新就能看到最新结果。
+     */
+    public List<RolePermissionView> listRolePermissionMatrix() {
+        return listAssignableRoles().stream()
+                .map(role -> new RolePermissionView(role.code(), role.name(),
+                        permissionMapper.selectPermissionsByRoleCode(role.code()).stream()
+                                .map(p -> new PermissionView(p.getCode(), p.getName()))
+                                .toList()))
                 .toList();
     }
 
