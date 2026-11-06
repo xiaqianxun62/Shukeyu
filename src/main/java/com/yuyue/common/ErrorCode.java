@@ -16,6 +16,7 @@ public enum ErrorCode {
     USER_NAME_DUPLICATE(1004, "用户昵称已被占用，请换一个"),
     USER_NOT_FOUND(1002, "用户不存在"),
     PASSWORD_ERROR(1003, "账号或密码错误"),
+    PASSWORD_MISMATCH(1005, "原密码不正确"),
     GAME_FULL(2001, "球局人数已满"),
     GAME_STATUS_ERROR(2002, "球局状态不允许该操作"),
     ALREADY_REGISTERED(2003, "已报名该球局"),
@@ -30,6 +31,13 @@ public enum ErrorCode {
     TOURNAMENT_ENTRY_EXISTS(4005, "你已报名该赛事，或已作为他人搭档报名"),
     TOURNAMENT_PARTNER_INVALID(4006, "搭档不符合该组别要求"),
     TOURNAMENT_SCORE_INVALID(4007, "比分不合法"),
+    /* ---------- AI 智能服务 ---------- */
+
+    /** AI 总开关关闭、模型未装配、并发已满、熔断中、上游失败等统一归到这里 */
+    AI_UNAVAILABLE(6001, "AI 服务暂时不可用，请稍后再试"),
+    /** 每用户每日调用次数超限 */
+    AI_QUOTA_EXCEEDED(6002, "今日 AI 使用次数已达上限，请明天再试"),
+
     SYSTEM_ERROR(500, "系统繁忙，请稍后重试");
 
     private final int code;

@@ -5,6 +5,7 @@ import com.yuyue.common.ErrorCode;
 import com.yuyue.config.EloProperties;
 import com.yuyue.config.UploadProperties;
 import com.yuyue.dto.AuthResponse;
+import com.yuyue.dto.ChangePasswordRequest;
 import com.yuyue.dto.LoginRequest;
 import com.yuyue.dto.ProfileUpdateRequest;
 import com.yuyue.dto.RegisterRequest;
@@ -172,6 +173,53 @@ public class UserService {
         }
         userMapper.updateById(user);
         return buildAuthResponse(user, null);
+    }
+
+    /**
+     * 自助修改密码。
+     * <p>
+     * 已设置过密码的账号必须校验原密码；微信用户（从未设置密码）首次设置只需新密码，
+     * 但前提是已绑定账号，否则这个密码没有任何登录入口。
+     * <p>
+     * 成功后换发新 token：其余设备上早于此刻签发的 token 立刻失效，当前设备用新 token 继续。
+     */
+    public AuthResponse changePassword(Long userId, ChangePasswordRequest req) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        String newPassword = req.getNewPassword();
+        if (hasPassword(user)) {
+            String oldPassword = req.getOldPassword();
+            if (oldPassword == null || oldPassword.isEmpty()) {
+                throw new BizException(ErrorCode.PARAM_ERROR, "请填写原密码");
+            }
+            String[] parts = user.getPasswordHash().split(":", 2);
+            if (parts.length != 2 || !hash(oldPassword, parts[1]).equals(parts[0])) {
+                throw new BizException(ErrorCode.PASSWORD_MISMATCH);
+            }
+            if (hash(newPassword, parts[1]).equals(parts[0])) {
+                throw new BizException(ErrorCode.PARAM_ERROR, "新密码不能与原密码相同");
+            }
+        } else if (user.getAccount() == null || user.getAccount().isBlank()) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "请先绑定账号后再设置密码");
+        }
+
+        String salt = randomSalt();
+        user.setPasswordHash(hash(newPassword, salt) + ":" + salt);
+        userMapper.updateById(user);
+
+        // 踢掉其他设备：标记「早于此刻签发的 token 失效」。
+        // 取整到秒再减 1，保证紧接着签发的新 token（iat 为秒级）一定落在标记之后。
+        long resetMs = (System.currentTimeMillis() / 1000) * 1000 - 1;
+        redisTemplate.opsForValue().set(
+                Constants.JWT_PWD_RESET_PREFIX + userId,
+                String.valueOf(resetMs),
+                Duration.ofHours(jwtProperties.getExpireHours()));
+        log.info("用户修改密码成功，其他设备旧会话已失效: userId={}", userId);
+
+        return buildAuthResponse(user, jwtUtil.issue(userId));
     }
 
     /**
@@ -353,7 +401,14 @@ public class UserService {
                 .mixedLoss(user.getMixedLoss())
                 .permissions(permissionService.getPermissions(user.getId()))
                 .isVerified(user.getIsVerified() != null && user.getIsVerified() == 1)
+                .hasPassword(hasPassword(user))
                 .build();
+    }
+
+    /** 是否已设置可用的登录密码（微信用户从未设置过时为 false） */
+    private boolean hasPassword(User user) {
+        String passwordHash = user.getPasswordHash();
+        return passwordHash != null && passwordHash.contains(":");
     }
 
     private String hash(String password, String salt) {

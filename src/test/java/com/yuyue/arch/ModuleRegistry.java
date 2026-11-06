@@ -23,9 +23,11 @@ public final class ModuleRegistry {
     public static final String ELO = "elo";
     public static final String USER = "user";
     public static final String OPS = "ops";
+    /** AI 智能服务域：只写 ai_usage_log，其余数据只读 */
+    public static final String AI = "ai";
 
     public static final List<String> ALLOWED_MODULES =
-            List.of(GAME, MATCH, ROTATION, TOURNAMENT, ELO, USER, OPS);
+            List.of(GAME, MATCH, ROTATION, TOURNAMENT, ELO, USER, OPS, AI);
 
     /** 类简单名 → 模块 */
     public static final Map<String, String> MODULES = new LinkedHashMap<>();
@@ -48,7 +50,12 @@ public final class ModuleRegistry {
             cn("com.yuyue.service.UserService"),
             cn("com.yuyue.service.VerificationService"),
             cn("com.yuyue.service.VisitLogService"),
-            cn("com.yuyue.service.WeChatService"));
+            cn("com.yuyue.service.WeChatService"),
+            cn("com.yuyue.ai.service.AiUsageService"),
+            cn("com.yuyue.ai.service.AiChatService"),
+            cn("com.yuyue.ai.service.AiConversationService"),
+            cn("com.yuyue.ai.service.AiHealthService"),
+            cn("com.yuyue.ai.gateway.AiGateway"));
 
     public static final List<Class<?>> CONTROLLERS = List.of(
             cn("com.yuyue.controller.AuthController"),
@@ -63,7 +70,9 @@ public final class ModuleRegistry {
             cn("com.yuyue.controller.TournamentController"),
             cn("com.yuyue.controller.UserController"),
             cn("com.yuyue.controller.VerificationController"),
-            cn("com.yuyue.controller.VisitLogController"));
+            cn("com.yuyue.controller.VisitLogController"),
+            cn("com.yuyue.ai.controller.AiChatController"),
+            cn("com.yuyue.ai.controller.AiHealthController"));
 
     /** 四个纯计算引擎：零 Spring 依赖，是将来拆服务的种子 */
     public static final List<Class<?>> ENGINES = List.of(
@@ -104,6 +113,9 @@ public final class ModuleRegistry {
         reg(USER, "UserService", "RankingService", "WeChatService", "VerificationService",
                 "CaptchaService", "AuthController", "UserController", "VerificationController",
                 "RankingController");
+        // AI 域：模型调用网关、问答编排、会话存储与用量计量（只写 ai_* 自己的表）
+        reg(AI, "AiGateway", "AiUsageService", "AiChatService", "AiConversationService",
+                "AiHealthService", "AiChatController", "AiHealthController");
         // 运营域：设置、访问日志、场地
         reg(OPS, "SettingsService", "VisitLogService",
                 "SettingsController", "VisitLogController", "CourtController");

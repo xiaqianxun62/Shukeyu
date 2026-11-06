@@ -21,6 +21,37 @@ spring:
   # JSON 序列化统一上海时间（Date/Instant 等带时区类型；LocalDateTime 本身无时区，原样输出）
   jackson:
     time-zone: Asia/Shanghai
+  # Spring AI：统一走 OpenAI 兼容协议（DeepSeek / 通义兼容模式 / 智谱等只要改 base-url）
+  ai:
+    model:
+      # 默认全部 none：不装配任何模型 Bean，也就不校验 API Key，未配置 AI 时应用照常启动。
+      # 启用方式：AI_CHAT_PROVIDER=openai + AI_API_KEY=xxx（embedding 单独用 AI_EMBEDDING_PROVIDER 控制）
+      # 注意：OpenAI starter 会同时装配 chat / embedding / 语音 / 图像 / 审核六类模型，
+      # 每一类都 matchIfMissing=true 且缺 Key 时直接抛异常终止启动，所以要逐类关掉。
+      chat: ${AI_CHAT_PROVIDER:none}
+      embedding: ${AI_EMBEDDING_PROVIDER:none}
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
+    openai:
+      api-key: ${AI_API_KEY:}
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          model: ${AI_MODEL:deepseek-chat}
+          temperature: 0.7
+    # SDK 内部重试关到 1 次：默认是 10 次 × 2s 起、5 倍退避，
+    # 上游一抖动就会被 SDK 自己拖几分钟，远超网关的业务超时。
+    # 重试统一由 AiGateway 按 yuyue.ai.max-attempts 控制，口径只有一处。
+    retry:
+      max-attempts: 1
+  # 模型调用超时：AI 请求普遍 3~15s，必须设读超时，否则异常时线程会被一直占住
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 40s
   datasource:
     # allowPublicKeyRetrieval=true：服务端用 caching_sha2_password / sha256_password 时，
     # 非 TLS 连接需要向服务端索取 RSA 公钥来加密密码，否则报
@@ -128,6 +159,21 @@ yuyue:
     margin-win-score: 21       # 一局满分，净胜分以此为满格
     margin-floor: 0.25         # 触发线，净胜 5 分以内不触发加成
     margin-bonus-rate: 0.5     # 打满时胜方额外拿 K × 0.5 分
+  # AI 业务侧开关（与上面的 spring.ai.* 分工：那边管能不能连上，这边管怎么用）
+  ai:
+    enabled: ${AI_ENABLED:false}
+    provider: ${AI_CHAT_PROVIDER:none}
+    chat-model: ${AI_MODEL:deepseek-chat}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:20}
+    max-concurrency: ${AI_MAX_CONCURRENCY:8}
+    daily-quota: ${AI_DAILY_QUOTA:30}
+    # 连续失败 5 次熔断 60 秒；失败后重试 1 次（合计最多 2 次），退避 800ms
+    failure-threshold: ${AI_FAILURE_THRESHOLD:5}
+    open-seconds: ${AI_OPEN_SECONDS:60}
+    max-attempts: ${AI_MAX_ATTEMPTS:2}
+    retry-backoff-ms: ${AI_RETRY_BACKOFF_MS:800}
+    # 允许 /api/ai/health?ping=true 真实调用一次模型（会产生极少 token）
+    health-ping-enabled: ${AI_HEALTH_PING:true}
   # 个人头像上传：保存目录、对外 URL 前缀、单文件大小上限
   upload:
     # 生产环境统一用宝塔 uploads 目录（与 nginx 静态映射、multipart 临时目录同根）；

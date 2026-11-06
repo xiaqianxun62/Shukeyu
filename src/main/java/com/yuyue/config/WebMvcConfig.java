@@ -56,6 +56,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/actuator/**",
                         // ELO 试算：纯计算工具，无需登录（不读库不写库）
                         "/elo/**",
+                        // AI 健康检查：运维探活用，只返回就绪状态，不含密钥信息
+                        "/ai/health",
                         // 轮排试算公开；球局轮排需登录（/rotation/game/** 不再放行）
                         "/rotation/plan",
                         // Swagger / OpenAPI 文档资源必须放行，否则会被登录拦截

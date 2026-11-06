@@ -26,6 +26,9 @@ public class AuthResponse {
     /** 登录账号：绑定后才有，未绑定时为 null */
     private String account;
 
+    /** 是否已设置登录密码（微信用户从未设置时为 false，前端据此显示「设置密码」而不是「修改密码」） */
+    private Boolean hasPassword;
+
     /** 个人头像 URL */
     private String avatar;
 

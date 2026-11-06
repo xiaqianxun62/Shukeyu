@@ -4,6 +4,7 @@ import com.yuyue.common.ApiResponse;
 import com.yuyue.common.ErrorCode;
 import com.yuyue.common.OperationLog;
 import com.yuyue.dto.AuthResponse;
+import com.yuyue.dto.ChangePasswordRequest;
 import com.yuyue.dto.LoginRequest;
 import com.yuyue.dto.ProfileUpdateRequest;
 import com.yuyue.dto.RegisterRequest;
@@ -104,6 +105,14 @@ public class AuthController {
     @OperationLog("编辑个人资料")
     public ApiResponse<AuthResponse> updateProfile(@Valid @RequestBody ProfileUpdateRequest req) {
         return ApiResponse.ok(userService.updateProfile(UserContext.require(), req));
+    }
+
+    @Operation(summary = "修改密码",
+            description = "已设置密码需校验原密码；微信用户首次设置只需新密码（需先绑定账号）。成功后换发新 token，其他设备旧会话失效")
+    @PutMapping("password")
+    @OperationLog(value = "修改密码", logArgs = false)
+    public ApiResponse<AuthResponse> changePassword(@Valid @RequestBody ChangePasswordRequest req) {
+        return ApiResponse.ok(userService.changePassword(UserContext.require(), req));
     }
 
     @Operation(summary = "我的信息", description = "需携带 Authorization: Bearer <token>")
