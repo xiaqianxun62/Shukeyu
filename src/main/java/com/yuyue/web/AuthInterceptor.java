@@ -43,6 +43,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     /** GET /settings/home-notice：首页弹窗公告，未登录也要能拉 */
     private static final Pattern HOME_NOTICE = Pattern.compile(".*/settings/home-notice");
 
+    /** GET /settings/club-culture：俱乐部文化，官网首页未登录也要能拉 */
+    private static final Pattern CLUB_CULTURE = Pattern.compile(".*/settings/club-culture");
+
     /** GET /tournaments/{id}：赛事详情 */
     private static final Pattern TOURNAMENT_DETAIL = Pattern.compile(".*/tournaments/\\d+");
 
@@ -162,6 +165,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 || TOURNAMENT_MATCHES.matcher(uri).matches()
                 || HOME_POEM.matcher(uri).matches()
                 || HOME_NOTICE.matcher(uri).matches()
+                || CLUB_CULTURE.matcher(uri).matches()
                 || uri.endsWith("/stats/overview");
     }
 

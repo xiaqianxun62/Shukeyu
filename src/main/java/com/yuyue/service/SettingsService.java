@@ -26,6 +26,19 @@ public class SettingsService {
     /** 全站页脚文案（小程序 FooterSection & PC 官网底部共用） */
     private static final String REDIS_KEY_FOOTER = "yuyue:settings:footer";
 
+    /** 俱乐部文化（PC 官网首页展示区块 + PC 管理页编辑） */
+    private static final String REDIS_KEY_CLUB_CULTURE = "yuyue:settings:club_culture";
+
+    /** 俱乐部文化默认值（enabled=0：未配置前官网不展示该区块） */
+    private static final Map<String, String> DEFAULT_CLUB_CULTURE = Map.ofEntries(
+            Map.entry("enabled", "0"),
+            Map.entry("title", "数科羽俱乐部"),
+            Map.entry("slogan", ""),
+            Map.entry("intro", ""),
+            Map.entry("values", ""),
+            Map.entry("photos", "")
+    );
+
     /** 默认页脚文案 */
     private static final Map<String, String> DEFAULT_FOOTER = Map.of("text", "by 2026@千巽");
 
@@ -193,6 +206,55 @@ public class SettingsService {
         redis.opsForHash().putAll(REDIS_KEY_FOOTER, base);
         redis.expire(REDIS_KEY_FOOTER, java.time.Duration.ofDays(90));
         log.info("站点文案 footer 更新: {}", base);
+        return base;
+    }
+
+    /** GET /settings/club-culture（公开）：返回俱乐部文化配置，空则返回默认值 */
+    public Map<String, String> getClubCulture() {
+        Map<Object, Object> stored = redis.opsForHash().entries(REDIS_KEY_CLUB_CULTURE);
+        if (stored == null || stored.isEmpty()) {
+            return new LinkedHashMap<>(DEFAULT_CLUB_CULTURE);
+        }
+        Map<String, String> out = new LinkedHashMap<>();
+        DEFAULT_CLUB_CULTURE.keySet().forEach(k -> {
+            Object v = stored.get(k);
+            out.put(k, v == null ? DEFAULT_CLUB_CULTURE.get(k) : v.toString());
+        });
+        return out;
+    }
+
+    /**
+     * PUT /settings/club-culture（仅管理员）：更新俱乐部文化，空值跳过不修改。
+     * enabled 特殊：传任意值（含 "0"）即生效，其余字段空串视为不修改。
+     * intro / values 为多行文本按原文存储，photos 为换行分隔的 /uploads URL 列表。
+     */
+    public Map<String, String> updateClubCulture(Map<String, String> patch) {
+        Map<String, String> base = new HashMap<>(getClubCulture());
+        if (patch != null) {
+            // enabled 支持显式关闭：包含该 key 即覆盖
+            if (patch.containsKey("enabled")) {
+                String e = patch.get("enabled");
+                base.put("enabled", "1".equals(e) ? "1" : "0");
+            }
+            // photos 支持显式清空：管理页删光照片时传空串即可
+            if (patch.containsKey("photos")) {
+                String p = patch.get("photos");
+                base.put("photos", p == null ? "" : p.trim());
+            }
+            for (String key : DEFAULT_CLUB_CULTURE.keySet()) {
+                if ("enabled".equals(key) || "photos".equals(key)) {
+                    continue;
+                }
+                String v = patch.get(key);
+                if (v != null && !v.isBlank()) {
+                    base.put(key, v.trim());
+                }
+            }
+        }
+        redis.opsForHash().putAll(REDIS_KEY_CLUB_CULTURE, base);
+        redis.expire(REDIS_KEY_CLUB_CULTURE, java.time.Duration.ofDays(90));
+        log.info("站点文案 club-culture 更新: enabled={}, title={}",
+                base.get("enabled"), base.get("title"));
         return base;
     }
 }

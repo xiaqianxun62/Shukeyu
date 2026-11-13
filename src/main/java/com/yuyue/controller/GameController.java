@@ -12,6 +12,7 @@ import com.yuyue.dto.GameRegisterRequest;
 import com.yuyue.dto.GameResponse;
 import com.yuyue.exception.BizException;
 import com.yuyue.service.GameService;
+import com.yuyue.service.PermissionService;
 import com.yuyue.web.UserContext;
 import com.yuyue.util.ImageUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,6 +51,7 @@ public class GameController {
 
     private final GameService gameService;
     private final UploadProperties uploadProperties;
+    private final PermissionService permissionService;
 
     private static final java.util.Set<String> COVER_EXT_WHITELIST =
             java.util.Set.of("jpg", "jpeg", "png", "webp", "gif");
@@ -134,6 +136,15 @@ public class GameController {
     @GetMapping
     public ApiResponse<List<GameResponse>> list() {
         return ApiResponse.ok(gameService.list());
+    }
+
+    @Operation(summary = "管理端球局列表",
+            description = "持 game:manage 权限；返回全部球局（含隐藏与未认证球局），PC 管理页专用")
+    @GetMapping("manage")
+    @OperationLog("查看管理端球局列表")
+    public ApiResponse<List<GameResponse>> manageList() {
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_GAME_MANAGE);
+        return ApiResponse.ok(gameService.listForManage());
     }
 
     @Operation(summary = "我参与过的球局", description = "当前登录用户报名过的所有球局，按 playDate 倒序")

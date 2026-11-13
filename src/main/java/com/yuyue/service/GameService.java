@@ -199,6 +199,19 @@ public class GameService {
                 .stream().map(this::buildGameResponse).toList();
     }
 
+    /**
+     * 管理端球局列表：供持 game:manage 权限的 PC 管理页使用。
+     * 与 {@link #list()} 的区别：不过滤隐藏球局（否则隐藏后无法恢复）、
+     * 不过滤认证球局（管理者一律可见），按状态分组 + 日期排序口径一致。
+     */
+    public List<GameResponse> listForManage() {
+        return gameMapper.selectList(new LambdaQueryWrapper<Game>()
+                        .orderByAsc(Game::getStatus)
+                        .orderByAsc(Game::getPlayDate)
+                        .orderByAsc(Game::getStartTime))
+                .stream().map(this::buildGameResponse).toList();
+    }
+
     /** 判断用户是否通过 SHUKE 认证 */
     private boolean isVerifiedUser(Long userId) {
         User u = userMapper.selectById(userId);

@@ -90,9 +90,7 @@ public class SettingsController {
     @GetMapping("footer")
     public ApiResponse<Map<String, String>> getFooter() {
         return ApiResponse.ok(settingsService.getFooter());
-    }
-
-    /** 仅管理员可修改页脚文案 */
+    }    /** 仅管理员可修改页脚文案 */
     @Operation(summary = "修改页脚文案", description = "仅管理员可改；未传的字段保持原值")
     @PutMapping("footer")
     @OperationLog("修改页脚文案")
@@ -100,6 +98,23 @@ public class SettingsController {
             @RequestBody(required = false) Map<String, String> patch) {
         permissionService.requirePermission(UserContext.require(), PermissionService.P_SETTINGS_MANAGE);
         return ApiResponse.ok(settingsService.updateFooter(patch));
+    }
+
+    /** 俱乐部文化：公开接口（PC 官网首页展示区块），enabled=0 时前端不展示 */
+    @Operation(summary = "俱乐部文化", description = "公开接口；enabled=0 或未配置时前端不展示该区块")
+    @GetMapping("club-culture")
+    public ApiResponse<Map<String, String>> getClubCulture() {
+        return ApiResponse.ok(settingsService.getClubCulture());
+    }
+
+    /** 仅管理员可修改俱乐部文化；enabled 显式传值（含 "0"），其余字段空串视为不修改 */
+    @Operation(summary = "修改俱乐部文化", description = "仅管理员可改；未传的字段保持原值")
+    @PutMapping("club-culture")
+    @OperationLog("修改俱乐部文化")
+    public ApiResponse<Map<String, String>> updateClubCulture(
+            @RequestBody(required = false) Map<String, String> patch) {
+        permissionService.requirePermission(UserContext.require(), PermissionService.P_SETTINGS_MANAGE);
+        return ApiResponse.ok(settingsService.updateClubCulture(patch));
     }
 
     /**
